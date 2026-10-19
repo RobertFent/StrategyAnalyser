@@ -21,6 +21,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+from backtest import criteria
+from backtest.benchmarks import benchmark_metrics
 from backtest.data import OUTPUT_DIR, load_benchmark, load_prices, load_universe
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
@@ -34,7 +36,7 @@ COLS = ['cagr', 'max_drawdown', 'sharpe', 'calmar', 'trades', 'win_rate', 'avg_t
 def fmt_table(df: pd.DataFrame) -> str:
     out = df.copy()
     for c in out.columns:
-        if c in ('cagr', 'max_drawdown', 'win_rate', 'avg_trade', 'exposure', 'mean', 'median', 'p05', 'p95', 'spy_cagr', 'spy_maxdd'):
+        if c in ('cagr', 'max_drawdown', 'win_rate', 'avg_trade', 'exposure', 'mean', 'median', 'p05', 'p95', 'spy_cagr', 'spy_maxdd', 'timing_cagr', 'timing_maxdd'):
             out[c] = out[c].map(lambda x: f'{x * 100:7.2f}%' if pd.notna(x) else '')
         elif out[c].dtype.kind == 'f':
             out[c] = out[c].map(lambda x: f'{x:7.2f}' if pd.notna(x) else '')
@@ -109,6 +111,8 @@ def main() -> None:
     ap.add_argument('--holdout-start', default='2025-01-01')
     ap.add_argument('--cost-bps', type=float, default=5.0)
     ap.add_argument('--random-runs', type=int, default=20)
+    ap.add_argument('--quick', action='store_true',
+                    help='only baseline, verdict, costs and regimes (skips the slow sections 2, 4, 7)')
     args = ap.parse_args()
 
     p = StrategyParams.load(args.params) if args.params else StrategyParams()
@@ -128,40 +132,58 @@ def main() -> None:
 
     # 1 baseline
     rows = {}
+    metrics = {}
     for name, (s, e) in {'tuning period': (args.start, tune_end), 'holdout': (args.holdout_start, None),
                          'full': (args.start, None)}.items():
         res = simulate_portfolio(fs, trades, s, e, max_positions=p.max_positions, **sim)
         m = compute_metrics(res.equity, res.trades, res.exposure)
         b = bench.set_index('Date')['Close'].reindex(res.equity.index).ffill()
         bm = compute_metrics(b / b.iloc[0], pd.DataFrame(columns=['net_return', 'pnl', 'bars_held']))
+        bms = benchmark_metrics(bench, res.equity.index, sim['cost_per_side'])
+        tm = bms['SPY timing (>SMA200)']
+        metrics[name] = (m, bms)
         rows[name] = {**{c: m[c] for c in COLS}, 'exposure': m['exposure'],
-                      'spy_cagr': bm['cagr'], 'spy_maxdd': bm['max_drawdown'], 'spy_sharpe': bm['sharpe']}
+                      'spy_cagr': bm['cagr'], 'spy_maxdd': bm['max_drawdown'], 'spy_sharpe': bm['sharpe'],
+                      'timing_cagr': tm['cagr'], 'timing_maxdd': tm['max_drawdown'], 'timing_sharpe': tm['sharpe']}
         if name == 'full':
             full_res = res
     base = pd.DataFrame(rows).T
-    lines += ['1. BASELINE', fmt_table(base), '']
+    lines += ['1. BASELINE  (spy = SPY buy & hold, timing = SPY only while above its 200d average)',
+              fmt_table(base), '']
+
+    # verdict against criteria.py (decided before looking at results)
+    stressed_res = simulate_portfolio(fs, trades, args.start, None, max_positions=p.max_positions,
+                                      cost_per_side=criteria.STRESS_COST_BPS / 1e4)
+    stressed = compute_metrics(stressed_res.equity, stressed_res.trades, stressed_res.exposure)
+    (full_m, full_b), (hold_m, hold_b) = metrics['full'], metrics['holdout']
+    verdict = criteria.evaluate(full_m, hold_m, stressed, full_b['SPY buy & hold'],
+                                hold_b['SPY buy & hold'], hold_b['SPY timing (>SMA200)'])
+    lines += ['VERDICT (criteria in backtest/criteria.py; holdout = never used for tuning)',
+              *criteria.format_verdict(verdict), '']
 
     # 2 neighborhood
-    nb = neighborhood(ctx, p)
-    nb.to_csv(out / 'neighborhood.csv')
-    lines += ['2. NEIGHBORHOOD (tuning period, one parameter changed at a time)', fmt_table(nb), '']
+    if not args.quick:
+        nb = neighborhood(ctx, p)
+        nb.to_csv(out / 'neighborhood.csv')
+        lines += ['2. NEIGHBORHOOD (tuning period, one parameter changed at a time)', fmt_table(nb), '']
 
     # 3 costs
     cost = pd.DataFrame({f'{bps} bps': ctx.run(p, trades, cost_per_side=bps / 1e4) for bps in (0, 5, 10, 20)}).T[COLS]
     lines += ['3. COSTS per side (tuning period)', fmt_table(cost), '']
 
     # 4 slot choice
-    rnd = []
-    rng = np.random.default_rng(1)
-    for _ in range(args.random_runs):
-        t2 = trades.copy()
-        t2['rank'] = rng.random(len(t2))
-        t2 = t2.sort_values(['entry_date', 'rank']).reset_index(drop=True)
-        rnd.append(ctx.run(p, t2))
-    rnd = pd.DataFrame(rnd)[COLS]
-    sel = pd.DataFrame({'most oversold first': ctx.run(p, trades),
-                        'random (median)': rnd.median(), 'random (worst)': rnd.min(), 'random (best)': rnd.max()}).T[COLS]
-    lines += [f'4. SLOT CHOICE (tuning period, {args.random_runs} random runs)', fmt_table(sel), '']
+    if not args.quick:
+        rnd = []
+        rng = np.random.default_rng(1)
+        for _ in range(args.random_runs):
+            t2 = trades.copy()
+            t2['rank'] = rng.random(len(t2))
+            t2 = t2.sort_values(['entry_date', 'rank']).reset_index(drop=True)
+            rnd.append(ctx.run(p, t2))
+        rnd = pd.DataFrame(rnd)[COLS]
+        sel = pd.DataFrame({'most oversold first': ctx.run(p, trades),
+                            'random (median)': rnd.median(), 'random (worst)': rnd.min(), 'random (best)': rnd.max()}).T[COLS]
+        lines += [f'4. SLOT CHOICE (tuning period, {args.random_runs} random runs)', fmt_table(sel), '']
 
     # 5 random entries
     edge = random_entry_edge(fs, trades, args.start, tune_end or fs.dates.max())
@@ -188,7 +210,7 @@ def main() -> None:
 
     # 7 other universes
     uni_rows = {}
-    universes = load_universe()['Index'].unique()
+    universes = [] if args.quick else load_universe()['Index'].unique()
     for idx in [u for u in universes if u != args.index]:
         fs2 = FeatureStore(load_prices(idx), bench)
         ctx2 = Ctx(fs2, args.start, None, sim)

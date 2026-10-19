@@ -30,10 +30,11 @@ All commands run from the repo root. Each command prints a report and writes it 
 |---|---|---|
 | 1. Data | `python3 -m backtest.fetch` / `--update` | ~14 years of adjusted daily OHLCV + SPY/QQQ into `data/` |
 | 2. Tune | `python3 -m backtest.tune --space default --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar` | random/grid search with walk-forward validation (train 3y, test 1y), then one run on the untouched holdout |
-| 3. Analyze | `python3 -m backtest.analyze --params output/tuning_<ts>/best_params.json` | changes one parameter at a time, cost sensitivity, ranked vs random slot choice, signal vs random entry, regimes, other indices |
-| 4. Backtest | `python3 -m backtest.run --params strategies/current.json --start 2016-01-01` | full report, trades.csv and equity.csv vs SPY |
-| 5. Adopt | copy a `best_params.json` to `strategies/current.json` | only if it passes the checks below |
-| 6. Trade | `python3 -m backtest.fetch --update && python3 -m backtest.signals --holding AAPL ...` | entry candidates for the next open and exit signals for your holdings |
+| 3. Analyze | `python3 -m backtest.analyze --params output/tuning_<ts>/best_params.json` (`--quick` = verdict only) | **pass/fail verdict**, comparison with SPY and SPY timing, one parameter changed at a time, cost sensitivity, ranked vs random slot choice, signal vs random entry, regimes, other indices |
+| 4. Backtest | `python3 -m backtest.run --params strategies/current.json --start 2016-01-01` | full report, trades.csv and equity.csv vs SPY and SPY timing |
+| 5. Adopt | copy a `best_params.json` to `strategies/current.json` | only if the analyze verdict passes |
+| 6. Paper trade | daily `python3 -m backtest.fetch --update && python3 -m backtest.signals --holding AAPL ...`, monthly `python3 -m backtest.run --params strategies/current.json --start <first paper day>` | entry candidates and exit signals; monthly check of what the rules did since you started |
+| Own plan | edit `strategies/coach_plan.json`, then `python3 -m backtest.analyze --params strategies/coach_plan.json` | test a trading plan as a fixed hypothesis |
 | Tests | `python3 tests/test_backtest.py` | engine sanity checks |
 
 **Search spaces** live in `backtest/search_space.py`: `default` (all oscillators), `indicators` (only MFI, Bollinger %B, Connors RSI, Ultimate Oscillator, MACD and CCI), `breadth` (only buy when many stocks are oversold at once, with fewer slots) and `exits` (trailing stops, close-above-yesterday's-high exit). Narrow or extend any space with `--only key=v1,v2`, e.g. `--only entry_indicator=willr max_positions=5`.
@@ -43,10 +44,12 @@ All commands run from the repo root. Each command prints a report and writes it 
 **Execution model:** the signal is taken at the close and filled at the next open. Stops fill at the stop price, or at the open if the price gaps below it. Costs are 5 bps per side. Positions are equal-weight slots.
 
 ### Before adopting a rule set
-- Walk-forward "Stitched OOS" Sharpe and drawdown are at least as good as SPY's. This is the honest number, not the in-sample top score.
-- The holdout result is positive. Look at it once and don't re-tune afterwards.
-- In `analyze`, neighboring parameter values perform similarly (a plateau, not a spike), and results survive 10 bps costs.
-- Caveat: `symbols/` holds today's index members, so stocks that dropped out are missing (survivorship bias). Expect live results to be lower.
+- **Walk-forward:** for a tuned set, the "Stitched OOS" result in the tune report must be at least as good as SPY and SPY timing. This is the honest number, not the in-sample top score.
+- **Verdict:** `backtest.analyze` must pass all criteria in `backtest/criteria.py`. Set the thresholds before looking at results.
+- **Neighborhood:** values next to the chosen parameters must perform similarly (a plateau, not a spike).
+- **Caveat:** `symbols/` holds today's index members, so stocks that dropped out are missing (survivorship bias). Expect live results to be lower.
+
+**Benchmarks:** "SPY timing" means holding SPY only while it is above its 200-day average, otherwise cash. A stock-picking strategy that can't beat it gets its edge from the trend filter, not from picking stocks.
 
 Current findings and open ideas: [docs/strategy-research.md](docs/strategy-research.md).
 
@@ -55,41 +58,25 @@ Current findings and open ideas: [docs/strategy-research.md](docs/strategy-resea
 ## Status – 19 October 2026
 
 ### Where the repo stands
-- The `backtest/` package can download data, tune, stress-test, backtest and print daily signals.
-- The current rule set is saved in `strategies/current.json`. A second rule set to paper-trade is in `strategies/candidate_breadth.json`.
+- The `backtest/` package can download data, tune, stress-test with a pass/fail verdict, compare against SPY and SPY timing, backtest and print daily signals.
+- Saved rule sets:
+  - `strategies/current.json`: the reference rule set.
+  - `strategies/candidate_breadth.json`: broad-pullback variant.
+  - `strategies/coach_plan.json`: template for testing a trading plan.
 
-### Test setup
-- **Universe:** S&P 500, using today's members.
-- **Period:** daily bars; rules tuned on 2016–2024, then checked once on 2025 to Oct 2026 (never used for tuning).
-- **Trade assumptions:** long only, buy at the next open after a signal, 0.05% cost per side, up to 10 equal-sized positions.
+### Conclusion in one paragraph
+Several thousand rule sets were tested on the S&P 500 (2016–2024), with 10 different oscillators, trend and market filters, stops and exits. The honest tests were walk-forward 2019–2024 and an untouched 2025–2026 holdout. **No rule set is clearly better than holding SPY.** The best ones match SPY's return per unit of risk and roughly halve the drawdown, but earn less. In 2025–26 they also lost to the simple rule "hold SPY only above its 200-day average". The oversold signal on its own has no edge: random entries in the same stocks earn the same on average. The 200-day trend filter does most of the work.
 
-### Current rule set
-| | Rule |
-|---|---|
-| Entry | Williams %R(10) closes below −90, stock above its 200-day average, SPY above its 200-day average; buy next open |
-| Exit | Williams %R(10) closes above −60 → sell next open, **or** stop loss at entry − 4 × ADR(14), **or** after 20 trading days |
-| Sizing | up to 10 positions, 10% of equity each; if more signals than free slots, take the most oversold |
-
-| Result | Strategy | SPY buy & hold |
+| 2025 – Oct 2026 (never used for tuning) | CAGR | Max drawdown |
 |---|---|---|
-| 2016–2024 (tuning period) | 18.2% / yr, max drawdown −18%, win rate 67%, ~5 days per trade | 14.6% / yr, −34% |
-| 2019–2024, rules re-picked each year from the prior 3 years (realistic estimate) | 12.4% / yr, −21% | 17.1% / yr, −34% |
-| 2025 – Oct 2026 (unseen) | 8.0% / yr, −13% | 17.4% / yr, −19% |
-
-### Findings
-1. **The trend filter matters most.** Only buying stocks above their 200-day average halves the drawdown and doubles the return.
-2. **An oversold reading alone gives no edge.** On average, entries on oversold signals earn the same as random entries in the same stocks. The signal raises the win rate but makes the losers bigger.
-3. **The edge shows up when the whole market pulls back.** Days with many stocks oversold at once, and volatile stocks, did best.
-4. **More trades on broad pullbacks only, with fewer positions, did not hold up.** Good on 2025–26, but unstable when re-tuned each year. This is the paper-trade candidate.
-5. **Other exits did not help.** Tight trailing stops and "sell when the close is above yesterday's high" were worse.
-6. **Costs and universe matter.** At 0.20% cost per side the yearly return drops from 18% to 7%. On the Nasdaq-100 and S&P 100 the same rules make only 5–7% per year.
-7. **The edge is getting weaker.** It has faded since 2022, and in 2025–26 the strategy beats SPY on drawdown but not on return.
+| SPY buy & hold | 17.4% | −18.8% |
+| SPY timing (>200-day average) | 11.2% | −10.2% |
+| current.json (Williams %R(10) dip-buying, trend + market filter) | 7.3% | −12.8% |
+| Best of the new indicators (CCI) | −3.5% | −23.7% |
 
 ### Next steps
-- Paper-trade both rule sets with `python3 -m backtest.signals` and compare to the backtest monthly.
-- Limit positions per sector (signals often cluster in one sector).
-- Use larger positions on broad pullback days.
-- Use historical index members to remove survivorship bias.
-- Size positions by volatility instead of equal weight.
+1. Test the trading plan as a fixed hypothesis via `strategies/coach_plan.json` and the analyze verdict.
+2. Paper-trade for 3–6 months and compare with the backtest each month.
+3. Fix survivorship bias with historical index membership before trusting any result.
 
-Details: [docs/strategy-research.md](docs/strategy-research.md)
+Full results, verdict table and reasoning: [docs/strategy-research.md](docs/strategy-research.md)

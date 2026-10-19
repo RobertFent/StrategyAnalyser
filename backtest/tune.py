@@ -36,6 +36,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from backtest.benchmarks import benchmark_metrics, format_benchmarks
 from backtest.data import OUTPUT_DIR, load_benchmark, load_prices
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
@@ -293,8 +294,9 @@ def main() -> None:
                   .to_string(index=False, float_format=lambda x: f'{x:.3f}'),
                   '',
                   f'Stitched OOS:  CAGR {om["cagr"] * 100:.2f}%  MaxDD {om["max_drawdown"] * 100:.2f}%  '
-                  f'Sharpe {om["sharpe"]:.2f}    |  SPY same period: CAGR {bm["cagr"] * 100:.2f}%  '
-                  f'MaxDD {bm["max_drawdown"] * 100:.2f}%  Sharpe {bm["sharpe"]:.2f}',
+                  f'Sharpe {om["sharpe"]:.2f}  Calmar {om["calmar"]:.2f}',
+                  'Benchmarks, same period:',
+                  *format_benchmarks(benchmark_metrics(bench, oos.index, sim['cost_per_side'])),
                   '']
         pd.DataFrame({'oos_equity': oos}).to_csv(out / 'walk_forward_equity.csv')
 

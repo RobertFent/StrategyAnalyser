@@ -13,6 +13,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from backtest.benchmarks import benchmark_metrics, format_benchmarks, spy_timing
 from backtest.data import OUTPUT_DIR, load_benchmark, load_prices
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
@@ -69,14 +70,16 @@ def main() -> None:
         format_metrics(m),
         f'  Signals skipped (no free slot): {res.skipped}',
         '',
-        'BENCHMARK SPY buy & hold',
-        f'  CAGR {bm["cagr"] * 100:.2f}%  |  Max DD {bm["max_drawdown"] * 100:.2f}%  |  Sharpe {bm["sharpe"]:.2f}',
+        'BENCHMARKS (same period)',
+        *format_benchmarks(benchmark_metrics(bench, res.equity.index, args.cost_bps / 10_000)),
         '',
-        'YEARLY RETURNS (strategy vs SPY)',
+        'YEARLY RETURNS     strategy       SPY  SPY timing',
     ]
-    yr = pd.DataFrame({'strategy': yearly_returns(res.equity), 'spy': yearly_returns(bench_eq)})
+    timing_eq = spy_timing(bench, res.equity.index, cost_per_side=args.cost_bps / 10_000, capital=args.capital)
+    yr = pd.DataFrame({'strategy': yearly_returns(res.equity), 'spy': yearly_returns(bench_eq),
+                       'timing': yearly_returns(timing_eq)})
     for y, row in yr.iterrows():
-        lines.append(f'  {y}  {row["strategy"] * 100:7.2f}%  {row["spy"] * 100:7.2f}%')
+        lines.append(f'  {y}          {row["strategy"] * 100:7.2f}%  {row["spy"] * 100:7.2f}%  {row["timing"] * 100:7.2f}%')
     lines += ['', 'EXIT REASONS']
     if len(res.trades):
         grp = res.trades.groupby('exit_reason')['net_return'].agg(['count', 'mean'])
@@ -91,7 +94,7 @@ def main() -> None:
     out = OUTPUT_DIR / f'backtest_{datetime.now():%Y%m%d_%H%M%S}'
     out.mkdir(parents=True, exist_ok=True)
     res.trades.to_csv(out / 'trades.csv', index=False)
-    pd.DataFrame({'equity': res.equity, 'exposure': res.exposure, 'spy': bench_eq}).to_csv(out / 'equity.csv')
+    pd.DataFrame({'equity': res.equity, 'exposure': res.exposure, 'spy': bench_eq, 'spy_timing': timing_eq}).to_csv(out / 'equity.csv')
     (out / 'summary.txt').write_text(report)
     print(f'\nSaved to {out}')
 
