@@ -3,7 +3,7 @@
 All oscillators are returned on a 0..100 scale where LOW = OVERSOLD:
     rsi    RSI(n), Wilder smoothing
     willr  Williams %R(n) + 100        (WILLR -85  ==  15 here)
-    stoch  slow stochastic %K(n, 3)    (same definition as the PowerXStocksAnalyzer scraper)
+    stoch  slow stochastic %K(n, 3)    (%K smoothed by 3)
     ibs    internal bar strength (Close-Low)/(High-Low)*100, no length
 
 Every value at row t only uses data up to and including the close of t

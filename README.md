@@ -3,12 +3,12 @@
 Research for rule-based, long-only swing strategies on US index stocks (S&P 500, Nasdaq-100, S&P 100):
 backtest, tune with walk-forward validation, stress-test, and print daily signals.
 
-The daily scraper that feeds the stock screener lives in **PowerXStocksAnalyzer**; this repo is independent of it.
+Self-contained: everything needed (symbol lists, data download, research tools) is in this repo.
 
 ```
 backtest/              research package (python3 -m backtest.<command>)
 strategies/            chosen rule sets as JSON (current.json = the one to trade)
-symbols/               index constituents used by backtest.fetch (copied from PowerXStocksAnalyzer)
+symbols/               index constituents (refresh with python3 -m backtest.symbols)
 docs/                  research log and findings
 tests/                 engine sanity tests (no network)
 data/, output/         downloaded history / run results (git-ignored)
@@ -21,8 +21,7 @@ pip install -r requirements.txt
 python3 -m backtest.fetch          # first run: ~14 years of daily data into data/
 ```
 
-To refresh `symbols/` when index members change, run `python3 utils.py` in PowerXStocksAnalyzer
-and copy its `symbols/*.csv` here.
+When index members change: `python3 -m backtest.symbols` (Wikipedia), then `python3 -m backtest.fetch`.
 
 ## Workflow
 All commands run from the repo root. Each command prints a report and writes it to `output/<command>_<timestamp>/`.
@@ -56,7 +55,6 @@ Current findings and open ideas: [docs/strategy-research.md](docs/strategy-resea
 ## Status – 19 October 2026
 
 ### Where the repo stands
-- Split out of PowerXStocksAnalyzer, which keeps only the daily scraper for the screener.
 - The `backtest/` package can download data, tune, stress-test, backtest and print daily signals.
 - The current rule set is saved in `strategies/current.json`. A second rule set to paper-trade is in `strategies/candidate_breadth.json`.
 
