@@ -17,19 +17,40 @@ _OSC = [
      'entry_threshold': [5, 10, 15, 20, 25], 'exit_threshold': [50, 60, 70, 80]},
 ]
 
+# additional oscillators (same 0..100 / low = oversold convention, see features.py)
+_OSC_EXTRA = [
+    {'entry_indicator': ['mfi'], 'entry_length': [3, 5, 7, 10, 14],
+     'entry_threshold': [5, 10, 15, 20, 25], 'exit_threshold': [50, 60, 70, 80]},
+    {'entry_indicator': ['bbp'], 'entry_length': [10, 20],
+     'entry_threshold': [-10, 0, 5, 10, 20], 'exit_threshold': [50, 60, 80, 100]},
+    {'entry_indicator': ['crsi'], 'entry_length': [50, 100],          # length = percent-rank window
+     'entry_threshold': [5, 10, 15, 20], 'exit_threshold': [50, 60, 70, 80]},
+    {'entry_indicator': ['uo'], 'entry_length': [0],
+     'entry_threshold': [20, 25, 30, 35], 'exit_threshold': [50, 60, 70]},
+    {'entry_indicator': ['macd'], 'entry_length': [50, 100, 252],     # length = percent-rank window
+     'entry_threshold': [2, 5, 10, 15], 'exit_threshold': [50, 60, 70, 80]},
+    {'entry_indicator': ['cci'], 'entry_length': [50, 100, 252],      # length = percent-rank window
+     'entry_threshold': [2, 5, 10, 15], 'exit_threshold': [50, 60, 70, 80]},
+]
+
 
 def _with(common: dict, subs: list[dict]) -> list[dict]:
     return [{**sub, **common} for sub in subs]
 
 
-# 1) broad search over all oscillators, filters and exits
-DEFAULT = _with({
+_COMMON = {
     'entry_mode': ['cross', 'level'],
     'trend_ma': [0, 100, 200],
     'market_ma': [0, 200],
     'stop_adr_mult': [0, 2, 3, 4],
     'max_hold_days': [0, 5, 10, 20],
-}, _OSC)
+}
+
+# 1) broad search over all oscillators, filters and exits
+DEFAULT = _with(_COMMON, _OSC + _OSC_EXTRA)
+
+# 1b) only the additional oscillators (MFI, Bollinger %B, Connors RSI, Ultimate Osc, MACD, CCI)
+INDICATORS = _with(_COMMON, _OSC_EXTRA)
 
 # 2) only buy broad pullbacks (many stocks oversold at once) with fewer, bigger positions
 BREADTH = _with({
@@ -57,7 +78,7 @@ EXITS = [{
     'max_hold_days': [0, 5, 10, 20],
 }]
 
-SPACES = {'default': DEFAULT, 'breadth': BREADTH, 'exits': EXITS}
+SPACES = {'default': DEFAULT, 'indicators': INDICATORS, 'breadth': BREADTH, 'exits': EXITS}
 
 # values tried by `backtest.analyze` when changing one parameter at a time
 NEIGHBORHOOD = {

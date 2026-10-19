@@ -5,6 +5,14 @@ All oscillators are returned on a 0..100 scale where LOW = OVERSOLD:
     willr  Williams %R(n) + 100        (WILLR -85  ==  15 here)
     stoch  slow stochastic %K(n, 3)    (%K smoothed by 3)
     ibs    internal bar strength (Close-Low)/(High-Low)*100, no length
+    mfi    Money Flow Index(n) - volume-weighted RSI
+    bbp    Bollinger %B(n, 2 std) * 100 (can go below 0 / above 100)
+    crsi   Connors RSI: mean of RSI(3), RSI(2) of the up/down streak and the
+           percent rank of today's return over the last n days (n=100 classic)
+    uo     Ultimate Oscillator(7, 14, 28), no length
+    macd   percent rank of the MACD(12,26,9) histogram over the last n days
+           (low = momentum weakest vs. its own recent history)
+    cci    percent rank of CCI(20) over the last n days
 
 Every value at row t only uses data up to and including the close of t
 (no look-ahead). Rows are sorted by Ticker, Date and each ticker's rows are
@@ -15,7 +23,46 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-OSCILLATORS = ('rsi', 'willr', 'stoch', 'ibs')
+try:
+    from numba import njit
+except ImportError:  # works without numba, just slower
+    def njit(*args, **kwargs):
+        if args and callable(args[0]):
+            return args[0]
+        return lambda f: f
+
+
+@njit(cache=True)
+def _rolling_mad(values, first_row, n):
+    """Rolling mean absolute deviation over n rows, restarting at each ticker."""
+    out = np.full(values.shape[0], np.nan)
+    start = 0
+    for i in range(values.shape[0]):
+        if first_row[i]:
+            start = i
+        if i - start + 1 >= n:
+            w = values[i - n + 1:i + 1]
+            m = w.mean()
+            out[i] = np.abs(w - m).mean()
+    return out
+
+
+@njit(cache=True)
+def _streak(close, first_row):
+    """Consecutive up (+) / down (-) closes, reset at each ticker start."""
+    out = np.zeros(close.shape[0])
+    for i in range(close.shape[0]):
+        if first_row[i]:
+            out[i] = 0.0
+        elif close[i] > close[i - 1]:
+            out[i] = out[i - 1] + 1.0 if out[i - 1] > 0 else 1.0
+        elif close[i] < close[i - 1]:
+            out[i] = out[i - 1] - 1.0 if out[i - 1] < 0 else -1.0
+        else:
+            out[i] = 0.0
+    return out
+
+OSCILLATORS = ('rsi', 'willr', 'stoch', 'ibs', 'mfi', 'bbp', 'crsi', 'uo', 'macd', 'cci')
 
 
 class FeatureStore:
@@ -91,7 +138,10 @@ class FeatureStore:
         return self._grouped_rolling(self.close, n, 'mean')
 
     def _calc_rsi(self, n: int) -> np.ndarray:
-        delta = self.close - self.shift(self.close)
+        return self._rsi_of(self.close, n)
+
+    def _rsi_of(self, values: np.ndarray, n: int) -> np.ndarray:
+        delta = values - self.shift(values)
         gain = np.where(np.isnan(delta), np.nan, np.clip(delta, 0, None))
         loss = np.where(np.isnan(delta), np.nan, np.clip(-delta, 0, None))
         avg_gain = self._grouped_ewm(gain, 1.0 / n, n)
@@ -123,6 +173,76 @@ class FeatureStore:
             v = (self.close - self.low) / rng * 100.0
         v[rng == 0] = 50.0
         return v
+
+    def _grouped_pct_rank(self, values: np.ndarray, n: int) -> np.ndarray:
+        """Percent rank (0..100) of today's value within the last n values of the same ticker."""
+        s = pd.Series(values)
+        r = s.groupby(self._key.values, sort=False).rolling(n, min_periods=n).rank(pct=True)
+        return r.reset_index(level=0, drop=True).sort_index().to_numpy() * 100.0
+
+    def _calc_mfi(self, n: int) -> np.ndarray:
+        tp = (self.high + self.low + self.close) / 3.0
+        tp_prev = self.shift(tp)
+        flow = tp * self.volume
+        pos = np.where(tp > tp_prev, flow, 0.0)
+        neg = np.where(tp < tp_prev, flow, 0.0)
+        pos[np.isnan(tp_prev)] = np.nan
+        neg[np.isnan(tp_prev)] = np.nan
+        sp = self._grouped_rolling(pos, n, 'sum')
+        sn = self._grouped_rolling(neg, n, 'sum')
+        with np.errstate(divide='ignore', invalid='ignore'):
+            v = 100.0 * sp / (sp + sn)
+        v[(sp + sn) == 0] = 50.0
+        return v
+
+    def _calc_bbp(self, n: int) -> np.ndarray:
+        mean = self._grouped_rolling(self.close, n, 'mean')
+        std = self._grouped_rolling(self.close, n, 'std')
+        with np.errstate(divide='ignore', invalid='ignore'):
+            v = (self.close - (mean - 2 * std)) / (4 * std) * 100.0
+        v[std == 0] = 50.0
+        return v
+
+    def _calc_crsi(self, n: int) -> np.ndarray:
+        n = n or 100
+        streak = _streak(self.close, self.first_row)
+        ret = self.close / self.shift(self.close) - 1.0
+        return (self._rsi_of(self.close, 3) + self._rsi_of(streak, 2)
+                + self._grouped_pct_rank(ret, n)) / 3.0
+
+    def _calc_uo(self, _n: int = 0) -> np.ndarray:
+        prev_close = self.shift(self.close)
+        low = np.fmin(self.low, prev_close)
+        high = np.fmax(self.high, prev_close)
+        bp = self.close - low
+        tr = high - low
+        avgs = []
+        for k in (7, 14, 28):
+            sb = self._grouped_rolling(bp, k, 'sum')
+            st = self._grouped_rolling(tr, k, 'sum')
+            with np.errstate(divide='ignore', invalid='ignore'):
+                avgs.append(np.where(st > 0, sb / st, 0.5))
+        return 100.0 * (4 * avgs[0] + 2 * avgs[1] + avgs[2]) / 7.0
+
+    def _grouped_ema(self, values: np.ndarray, span: int) -> np.ndarray:
+        s = pd.Series(values)
+        return s.groupby(self._key.values, sort=False).transform(
+            lambda x: x.ewm(span=span, adjust=False).mean()).to_numpy()
+
+    def _calc_macd(self, n: int) -> np.ndarray:
+        n = n or 100
+        line = self._grouped_ema(self.close, 12) - self._grouped_ema(self.close, 26)
+        hist = line - self._grouped_ema(line, 9)
+        return self._grouped_pct_rank(hist, n)
+
+    def _calc_cci(self, n: int) -> np.ndarray:
+        n = n or 100
+        tp = (self.high + self.low + self.close) / 3.0
+        mean = self._grouped_rolling(tp, 20, 'mean')
+        mad = _rolling_mad(tp, self.first_row, 20)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            cci = (tp - mean) / (0.015 * mad)
+        return self._grouped_pct_rank(cci, n)
 
     def _calc_adr(self, n: int) -> np.ndarray:
         return self._grouped_rolling(self.high - self.low, n, 'mean')

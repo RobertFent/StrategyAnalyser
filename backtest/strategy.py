@@ -36,7 +36,7 @@ DOLLAR_VOLUME_LENGTH = 20
 
 @dataclass(frozen=True)
 class StrategyParams:
-    entry_indicator: str = 'willr'      # rsi | willr | stoch | ibs
+    entry_indicator: str = 'willr'      # rsi | willr | stoch | ibs | mfi | bbp | crsi | uo | macd | cci
     entry_length: int = 4
     entry_threshold: float = 15.0       # 0..100 scale, low = oversold (WILLR -85 == 15)
     entry_mode: str = 'cross'           # cross | level
@@ -94,12 +94,14 @@ class StrategyParams:
         return replace(self, **kw)
 
     def describe(self) -> str:
-        name = {'rsi': 'RSI', 'willr': 'Williams %R', 'stoch': 'Stoch %K', 'ibs': 'IBS'}
+        name = {'rsi': 'RSI', 'willr': 'Williams %R', 'stoch': 'Stoch %K', 'ibs': 'IBS', 'mfi': 'MFI',
+                'bbp': 'Bollinger %B', 'crsi': 'Connors RSI', 'uo': 'Ultimate Osc', 'macd': 'MACD-hist rank',
+                'cci': 'CCI rank'}
         def lvl(ind: str, v: float) -> str:
             return f'{v - 100:g}' if ind == 'willr' else f'{v:g}'
         ind, xind = self.entry_indicator, self.exit_ind
-        e_len = '' if ind == 'ibs' else f'({self.entry_length})'
-        x_len = '' if xind == 'ibs' else f'({self.exit_len})'
+        e_len = '' if ind in ('ibs', 'uo') else f'({self.entry_length})'
+        x_len = '' if xind in ('ibs', 'uo') else f'({self.exit_len})'
         when = 'first close' if self.entry_mode == 'cross' else 'any close'
         lines = [f'ENTRY: {when} with {name[ind]}{e_len} < {lvl(ind, self.entry_threshold)}']
         if self.trend_ma:

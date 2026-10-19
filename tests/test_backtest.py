@@ -57,6 +57,25 @@ def test_rsi_matches_reference():
     assert np.isnan(ours[:4]).all()
 
 
+def test_new_oscillators_are_causal_and_bounded():
+    p = synthetic_prices(3)
+    fs = FeatureStore(p)
+    for name, n in [('mfi', 14), ('crsi', 100), ('uo', 0), ('macd', 100), ('cci', 100), ('bbp', 20)]:
+        v = fs.oscillator(name, n)
+        ok = v[~np.isnan(v)]
+        assert len(ok) > 1000, name
+        if name != 'bbp':
+            assert ok.min() >= 0 and ok.max() <= 100, name
+    # causality: changing the future must not change past values
+    p2 = p.copy()
+    m = p2['Date'] >= '2018-01-01'
+    p2.loc[m, ['Open', 'High', 'Low', 'Close']] *= 1.5
+    fs2 = FeatureStore(p2)
+    past = (fs.dates < np.datetime64('2018-01-01'))
+    for name, n in [('mfi', 14), ('crsi', 100), ('uo', 0), ('macd', 100), ('cci', 100), ('bbp', 20)]:
+        assert np.allclose(fs.oscillator(name, n)[past], fs2.oscillator(name, n)[past], equal_nan=True), name
+
+
 def test_willr_scale():
     p = synthetic_prices(1)
     fs = FeatureStore(p)

@@ -55,7 +55,7 @@ class Ctx:
 def neighborhood(ctx: Ctx, p: StrategyParams) -> pd.DataFrame:
     rows = []
     for key, candidates in NEIGHBORHOOD.items():
-        if key == 'entry_length' and p.entry_indicator == 'ibs':
+        if key == 'entry_length' and p.entry_indicator in ('ibs', 'uo'):
             continue
         if key == 'exit_threshold' and p.exit_rule != 'osc':
             continue
