@@ -89,15 +89,15 @@ filters, stops and exits. They were checked year by year on 2019–2024 and on a
 choose them, with point-in-time index membership (no survivorship bias) and a check for luck.
 
 **No rule set beats holding SPY.** With survivorship bias removed, the best dip-buying and momentum rules make
-7–8% a year against SPY's 15%, with similar or worse drawdowns, and none passes the "unlikely to be luck" check.
+about 7.6% a year against SPY's 15%, with similar drawdowns, and none passes the "unlikely to be luck" check.
 The 200-day trend filter does most of the work; the indicators add little.
 
-| 2016 – Oct 2026, point-in-time members | Return / year | Worst drop | Verdict |
+| 2016 – Oct 2026, point-in-time members, 88% of member-days with prices | Return / year | Worst drop | Verdict |
 |---|---|---|---|
-| SPY buy & hold | 15.0% | −33.7% | – |
+| SPY buy & hold | 15.1% | −33.7% | – |
 | SPY timing (hold SPY only above its 200-day average) | 11.4% | −20.7% | – |
-| Reference dip-buying rules (`strategies/current.json`) | 8.1% | −22.8% | 2 of 7 |
-| Momentum, best of 400 (`strategies/candidate_momentum.json`) | 6.8% out-of-sample | −37.5% | luck check 1% |
+| Reference dip-buying rules (`strategies/current.json`) | 7.6% | −27.4% | 2 of 7, luck check 5% |
+| Momentum, best of 400 (`strategies/candidate_momentum.json`) | 7.6% out-of-sample 2019–24 | −29.2% | luck check 0% |
 
 Full results, verdicts and reasoning: **[docs/strategy-research.md](docs/strategy-research.md)**.
 Searching, stress tests and engine details: [docs/TECHNICAL.md](docs/TECHNICAL.md).

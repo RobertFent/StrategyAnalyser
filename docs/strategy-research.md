@@ -40,10 +40,10 @@ Several thousand rule sets in total. Each is listed with the command that reprod
 | Broad pullbacks → `strategies/candidate_breadth.json` | 6.2% / −39.3% / 0.42 | 18.3% / −16.8% * |
 | Exits | 19.8% / −12.9% / 1.22 ** | −5.4% / −26.3% |
 | More indicators (best: CCI) | 6.6% / −26.3% / 0.52 | −3.5% / −23.7% |
-| Momentum family, point-in-time members (20 Oct) | 6.8% / −37.5% / 0.39 | −4.6% / −21.8% |
+| Momentum family, point-in-time members (20 Oct) | 7.6% / −29.2% / 0.42 | +22.0% / −30.5% * |
 
 All rows except the last use today's index members (survivorship bias, see the update below); the reference
-set drops to 8.1% / yr over 2016–2026 with point-in-time members.
+set drops to 7.6% / yr over 2016–2026 with point-in-time members.
 
 \* Its walk-forward result is the worst of all, so the good holdout is most likely luck.
 \*\* This space was narrowed using earlier 2016–2024 results, so its walk-forward number is too optimistic. The holdout shows it.
@@ -69,15 +69,16 @@ a member. Effect on the reference rule set, 2016 – Oct 2026, same rules, same 
 
 | | Today's members (old) | Point-in-time members (new) |
 |---|---|---|
-| Return / year | 16.4% | **8.1%** |
-| Worst drop | −18.1% | −22.8% |
-| Sharpe | 1.15 | 0.64 |
+| Return / year | 16.4% | **7.6%** |
+| Worst drop | −18.1% | −27.4% |
+| Sharpe | 1.15 | 0.60 |
+| Luck check (edge over SPY real?) | 55% | 5% |
 | Verdict | 4 of 6 | **2 of 7 – do not adopt** |
 
 Half of the "edge" was buying dips in stocks that we only knew in hindsight would make it into the index.
-One part is still missing: prices for the ~250 companies that left the index since 2016 (taken over, bankrupt,
-demoted). Yahoo has most of the demoted ones but not the delisted ones. `python3 -m backtest.fetch --historical`
-downloads what is available and prints the coverage. Expect the numbers above to get a little worse again.
+`python3 -m backtest.fetch --historical` added prices for 115 of the 270 companies that left the index since
+2016; 88.4% of all member-days now have prices. The remaining gap is mostly companies that were taken over or
+renamed (Yahoo serves the history under the new ticker only). Remaining bias: small, and in the strategy's favour.
 
 ### 2. Momentum / trend following does not beat SPY here either
 New strategy family: buy the strongest stocks (top N by 3–12-month performance, rebalanced weekly or monthly,
@@ -86,12 +87,13 @@ walk-forward, point-in-time membership:
 
 | 2019–2024 walk-forward | CAGR | Worst drop | Sharpe |
 |---|---|---|---|
-| Momentum family (rules re-picked each year) | 6.8% | −37.5% | 0.39 |
+| Momentum family (rules re-picked each year) | 7.6% | −29.2% | 0.42 |
 | SPY buy & hold | 17.1% | −33.7% | 0.90 |
 | SPY timing | 12.2% | −20.7% | 0.97 |
 
-The best in-sample set (top 30 by 6-month performance, monthly, exit below the 200-day average: 22% / yr on
-2016–2024) made **−4.6% / yr in the 2025–26 holdout**. With today's members instead of point-in-time ones the
+The best in-sample set (top 30 by 3-month performance, weekly, exit below the 50-day average: 12% / yr on
+2016–2024) made +22% / yr in the 2025–26 holdout with a −31% drop, but its excess over SPY across 2016–2026 is
+−0.4% / yr and the deflated luck check is 0%: the holdout is one good year of a rule that failed its walk-forward. With today's members instead of point-in-time ones the
 same family showed 36% / yr out-of-sample: momentum is the family that survivorship bias flatters most.
 Concentrated momentum in large caps had two bad reversal years (2022, 2024) and 10–20 trades a year is too
 few to be stable.
@@ -103,7 +105,7 @@ Every report checks whether the edge over SPY is distinguishable from chance:
   automatically in `tune`): a lucky best-of-400 looks like Sharpe 0.9 by itself.
 - `analyze` also runs a random-entry test: the same trades with random entry days under the same filters.
 
-Results: reference set 5% (excess −6.9% / yr), best momentum set 1% after 400 variants. Nothing tested so far
+Results: reference set 5% (excess −7.3% / yr), best momentum set 0% after 400 variants. Nothing tested so far
 clears the 90% bar.
 
 ### 4. Corrected finding on the oversold signal
@@ -128,7 +130,6 @@ and after survivorship bias, below SPY.
 - **Searching more parameters or indicators won't change this.** It only produces more lucky in-sample winners.
 
 ## Next steps
-0. **Run `python3 -m backtest.fetch --historical` once** to add prices of removed index members, then re-run the reports.
 1. **Test the coach's trading plan as a fixed hypothesis.** Run `python3 -m backtest.plan`, answer the questions
    before looking at any result, then run `python3 -m backtest.report --params strategies/<plan>.json` once.
    The verdict decides. Don't tweak afterwards. To compare variants, decide all of them up front and report every one.
