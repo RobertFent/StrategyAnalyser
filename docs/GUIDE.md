@@ -6,7 +6,14 @@ commands into the Terminal and read the result in your browser.
 
 ---
 
-## 1. One-time setup (about 10 minutes)
+## 0. The short way: the launcher and the Workbench
+
+Double-click **`start.command`** (Mac) or **`start.bat`** (Windows). The first run sets everything up; then the
+**Workbench** opens in your browser with one button per step below (download data, reports, planner, stress test,
+search). Long steps run in the background and show their progress under *Jobs*. Everything in sections 1–5 can be
+done from there; the Terminal commands remain for reference.
+
+## 1. One-time setup by hand (about 10 minutes)
 
 1. **Install Python.** On a Mac, download it from [python.org/downloads](https://www.python.org/downloads/)
    and run the installer. On Windows, tick *"Add Python to PATH"* in the installer.

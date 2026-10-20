@@ -8,7 +8,7 @@ COMMANDS = [
         ('python3 -m backtest.membership [--check]', 'rebuild the S&P 500 membership history / check price coverage'),
     ]),
     ('Testing a plan (no coding)', [
-        ('python3 -m backtest.app', 'planner in your browser: build a plan, save it, run the report'),
+        ('python3 -m backtest.app', 'workbench + planner in your browser: every step as a button (or double-click start.command / start.bat)'),
         ('python3 -m backtest.plan', 'same in the Terminal: answer questions -> strategies/<name>.json'),
         ('python3 -m backtest.report --params strategies/<name>.json', 'one-page HTML report with verdict and charts'),
         ('python3 -m backtest.compare [--params a.json b.json]', 'all strategies on one page against SPY (default: every file in strategies/)'),

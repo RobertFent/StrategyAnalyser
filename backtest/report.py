@@ -121,7 +121,8 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
         f'<span class="crit">{html.escape(name)}</span><span class="detail">{html.escape(detail)}</span></li>'
         for name, ok, detail in verdict)
     rules = html.escape(p.describe())
-    title = meta.get('name') or params_path.stem.replace('_', ' ').title()
+    title = meta.get('name') or (f'Best set of {params_path.parent.name}' if params_path.stem == 'best_params'
+                                 else params_path.stem.replace('_', ' ').title())
     period = f'{idx[0].date():%d %b %Y} – {idx[-1].date():%d %b %Y}'
     headline_ok = passed == len(verdict)
 

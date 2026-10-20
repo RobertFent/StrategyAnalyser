@@ -14,7 +14,8 @@ backtest/
   engine.py                 trade generation (numba) and portfolio simulation
   metrics.py, benchmarks.py CAGR, drawdown, Sharpe, Calmar; SPY buy & hold, SPY timing
   criteria.py               the 7 pass/fail checks used by the verdict
-  app.py, plan.py, report.py  planner web app (stdlib http.server, 127.0.0.1 only), terminal questionnaire, HTML report
+  app.py, workbench.py, jobs.py  web app: workbench (every step as a button, background subprocess jobs) + planner
+  plan.py, report.py        terminal questionnaire, HTML report
   compare.py                multi-strategy comparison page
   run.py, analyze.py, tune.py, signals.py
   search_space.py           what tune searches
@@ -63,7 +64,7 @@ All commands run from the repo root. Each command prints a report and writes it 
 `max_new_per_day` (portfolio level), `rank_by='symbol_roi'` (free slots go to symbols whose earlier completed
 trades had the best average return; no look-ahead), `obe_min_gap` (entry only if the open is that far below the
 signal close), `add_drop_pct` (second equal block at entry × (1 − pct), filled at the open on a gap, skipped within
-`add_skip_near_stop` of the stop; the portfolio funds it from cash if available), `adr_length` (days in the ADR used for stops, default 14).
+`add_skip_near_stop` of the stop; the portfolio funds it from cash if available).
 The exit rule of the rule book is not in the excerpt we have; `strategies/rsi4_*.json` use a placeholder.
 
 ## Significance

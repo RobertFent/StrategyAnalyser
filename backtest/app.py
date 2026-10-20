@@ -21,8 +21,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from backtest.data import OUTPUT_DIR, ROOT_DIR, load_benchmark, load_prices
+from backtest import jobs
 from backtest.features import FeatureStore
 from backtest.membership import load_membership
+from backtest.workbench import PAGE as WORKBENCH_PAGE
 from backtest.strategy import StrategyParams
 
 STRATEGY_DIR = ROOT_DIR / 'strategies'
@@ -133,6 +135,39 @@ def params_from_form(f: dict) -> StrategyParams:
     return p
 
 
+def _best_params_path(rel: str) -> Path | None:
+    """Accept output/tuning_*/best_params.json (and nothing else outside strategies/)."""
+    if not rel or 'best_params.json' not in rel:
+        return None
+    f = (ROOT_DIR / rel).resolve()
+    if f.is_file() and f.name == 'best_params.json' and str(f).startswith(str(OUTPUT_DIR.resolve())):
+        return f
+    return None
+
+
+def data_status() -> dict:
+    """What the workbench shows under 'Price data'."""
+    from backtest.data import DATA_DIR, load_universe
+    out = {'has_data': False, 'strategies': [{'file': s['file'], 'name': s['name']} for s in list_strategies()],
+           'reports': list_reports()}
+    try:
+        from backtest.data import load_table
+        prices = load_table('prices')
+    except FileNotFoundError:
+        return out
+    out.update({'has_data': True, 'tickers': int(prices['Ticker'].nunique()),
+                'first': str(prices['Date'].min().date()), 'last': str(prices['Date'].max().date())})
+    m = load_membership('sp500')
+    out['membership'] = m is not None
+    if m is not None:
+        try:
+            from backtest.membership import coverage
+            out['coverage'] = round(coverage(m, prices, '2016-01-01')['member_days_covered'] * 100, 1)
+        except Exception:
+            out['coverage'] = None
+    return out
+
+
 def list_strategies() -> list[dict]:
     out = []
     for path in sorted(STRATEGY_DIR.glob('*.json')):
@@ -186,8 +221,19 @@ class Handler(BaseHTTPRequestHandler):
                 {'key': k, 'name': n, 'help': h, 'hasLength': hl, 'length': dl, 'lengthLabel': ll,
                  'entry': e, 'exit': x, 'scale': sc} for k, n, h, hl, dl, ll, e, x, sc in INDICATORS]))
             return self._send(200, page.encode(), 'text/html; charset=utf-8')
+        if path == '/workbench':
+            return self._send(200, WORKBENCH_PAGE.encode(), 'text/html; charset=utf-8')
         if path == '/api/state':
             return self._json({'strategies': list_strategies(), 'reports': list_reports()})
+        if path == '/api/status':
+            return self._json(data_status())
+        if path == '/api/jobs':
+            return self._json(jobs.list_jobs())
+        if path.startswith('/text/'):
+            rel = unquote(path[len('/text/'):])
+            f = (ROOT_DIR / rel).resolve()
+            if f.is_file() and f.suffix in ('.txt', '.log', '.csv', '.json') and str(f).startswith(str(OUTPUT_DIR.resolve())):
+                return self._send(200, f.read_bytes(), 'text/plain; charset=utf-8')
         if path.startswith('/reports/'):
             name = Path(unquote(path[len('/reports/'):])).name
             f = OUTPUT_DIR / name
@@ -219,8 +265,25 @@ class Handler(BaseHTTPRequestHandler):
                 out = build_compare(files, 'sp500', body.get('start') or '2016-01-01',
                                     body.get('holdout_start') or '2025-01-01', float(body.get('cost_bps') or 5))
                 return self._json({'url': f'/reports/{out.name}'})
+            if path == '/api/jobs':
+                return self._json(jobs.start_job(body.get('kind', ''), body.get('opts') or {}))
+            m = re.fullmatch(r'/api/jobs/([\w.-]+)/cancel', path)
+            if m:
+                return self._json({'ok': jobs.cancel_job(m.group(1))})
+            if path == '/api/adopt':
+                src = _best_params_path(body.get('file', ''))
+                if src is None:
+                    return self._json({'error': 'File not found.'}, 404)
+                name = (body.get('name') or 'Best of search').strip()[:80]
+                data = json.loads(src.read_text())
+                p = StrategyParams.from_dict(data.get('params', data))
+                out = STRATEGY_DIR / f'{slugify(name)}.json'
+                out.write_text(json.dumps({'name': name, 'note': f'Adopted from {src.parent.name} (best in-sample set of a search; '
+                                           f'judge it by the walk-forward result, not by the tuning period).',
+                                           'params': p.to_dict(), 'trials': data.get('trials', 1)}, indent=2) + '\n')
+                return self._json({'file': out.name})
             if path == '/api/run':
-                file = STRATEGY_DIR / Path(body.get('file', '')).name
+                file = _best_params_path(body.get('file', '')) or STRATEGY_DIR / Path(body.get('file', '')).name
                 if not file.is_file():
                     return self._json({'error': 'Strategy file not found.'}, 404)
                 from backtest.report import build  # imported lazily: keeps start-up fast
@@ -255,7 +318,7 @@ def main() -> None:
             continue
     if server is None:
         raise SystemExit('No free port found.')
-    url = f'http://127.0.0.1:{server.server_port}'
+    url = f'http://127.0.0.1:{server.server_port}/workbench'
     print(f'Strategy planner running at {url}\nStop it with Ctrl+C.')
     threading.Thread(target=lambda: feature_store('sp500'), daemon=True).start()  # warm up data in the background
     if not args.no_open:
@@ -348,6 +411,7 @@ a { color: var(--accent); }
 </head>
 <body>
 <main>
+<nav style="display:flex;gap:18px;margin-bottom:6px;font-size:14px"><a href="/workbench" style="color:var(--accent);text-decoration:none;font-weight:600">Workbench</a><a href="/" style="color:var(--text);text-decoration:none;font-weight:600">Planner</a></nav>
 <header>
   <h1>Strategy Planner</h1>
   <p>Describe your trading plan, then test it on 10 years of S&amp;P 500 stocks against simply holding the index.</p>
