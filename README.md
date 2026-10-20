@@ -1,20 +1,39 @@
 # StrategyAnalyser
 
+## Quick start
+
+**You need:** Python 3.10 or newer ([python.org/downloads](https://www.python.org/downloads/)) and a Terminal opened in this folder.
+
+**First time** (about 5 minutes):
+```sh
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python3 -m backtest.fetch          # downloads ~14 years of daily prices (about 1 minute)
+python3 -m backtest.app            # opens the Strategy Planner in your browser
+```
+
+**Every next time:**
+```sh
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python3 -m backtest.fetch --update # optional: add the latest trading days
+python3 -m backtest.app
+```
+
+In the planner: describe your rules, click **Save & run backtest** and the report opens after about a minute.
+Other useful commands:
+
+| Command | What it does |
+|---|---|
+| `python3 -m backtest.report` | report for the reference rule set (`strategies/current.json`) |
+| `python3 -m backtest.signals --params strategies/<plan>.json` | today's buy candidates for a plan (for paper trading) |
+| `python3 -m backtest` | list of all commands |
+
+New to this? The **[Guide](docs/GUIDE.md)** explains every step, how to read the report and how to paper trade.
+
+## What this is
 Tests indicator-based swing trading rules on S&P 500 stocks over 10+ years, with clear buy and sell rules.
 It compares them honestly against simply holding the index.
-
-**Not a programmer?** Start with the **[Guide](docs/GUIDE.md)**. It covers setup, testing your own plan without
-coding, reading the report and paper trading.
-
-## Quick start
-```sh
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python3 -m backtest.fetch           # ~14 years of daily prices (1 min)
-python3 -m backtest.app             # planner in your browser: build a plan and test it with one click
-python3 -m backtest.report          # report for the reference rule set
-python3 -m backtest                 # list of all commands
-```
 
 ## Main finding (status October 2026)
 Several thousand rule sets were tested: 10 indicators, trend and market filters, stops and exits. They were checked on 2019–2024
