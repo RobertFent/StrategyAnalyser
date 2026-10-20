@@ -44,6 +44,8 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-1px; margin-right:6px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .msg { margin-top:10px; font-size:14px; border-radius:9px; padding:9px 12px; display:none; } .msg.err { display:block; background:var(--bad-soft); color:var(--bad); }
+.howto { margin-top:14px; background:var(--accent-soft); border:1px solid var(--border); border-radius:12px; padding:10px 16px; font-size:14.5px; }
+.howto summary { cursor:pointer; font-weight:650; } .howto ol { margin:8px 0 6px; padding-left:22px; } .howto li { margin:3px 0; } .howto p { margin:6px 0 2px; color:var(--text-2); }
 .readme { font-size:14px; color:var(--text-2); } .readme table { border-collapse:collapse; width:100%; } .readme th, .readme td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; } .readme th { color:var(--text); font-weight:600; white-space:nowrap; }
 </style>
 </head>
@@ -51,6 +53,17 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 <main>
 <nav><a href="/workbench" class="cur">Workbench</a><a href="/">Planner</a></nav>
 <header><h1>Strategy Workbench</h1><p>Every step of the guide as a button. Long steps run in the background; their progress shows on the right.</p></header>
+
+<details class="howto" open>
+  <summary>How to use</summary>
+  <ol>
+    <li><b>First time:</b> step 1, <i>Download all price data</i> (1–2 min). Later just <i>Add the latest trading days</i>.</li>
+    <li><b>See results:</b> step 2, pick a plan → <i>Report for this plan</i>, or <i>Compare all plans with SPY</i>.</li>
+    <li><b>Your own rules:</b> step 3 opens the Planner. Write the rules down first, then test them once; don't tweak until it looks good.</li>
+    <li><b>Check it holds up:</b> step 4 <i>Quick</i> stress test on the plan; step 5 only if you want the computer to search for rules.</li>
+  </ol>
+  <p>Results appear under <b>Jobs</b> on the right: click <i>Open report</i>. Read the <b>test period</b> and the <b>verdict</b> first; all 7 checks must pass before paper trading. Close this tab any time; jobs keep running while the launcher window is open.</p>
+</details>
 
 <div class="layout">
 <div>

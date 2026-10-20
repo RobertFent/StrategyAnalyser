@@ -25,6 +25,11 @@ on Windows tick *"Add Python to PATH"* in the installer). Then:
 | 4 | **Quick / Full** stress test | verdict and luck checks (1 min), or also neighbouring settings, costs and a random-entry test (5 min); text report |
 | 5 | **Start search** | tries hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
 
+**In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). See results → step 2
+*Report for this plan* or *Compare all plans with SPY*. Your own rules → step 3 Planner: write them down first, test once,
+don't tweak until it looks good. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
+Results appear under *Jobs* → *Open report*; read the **test period** and the **verdict** first.
+
 Long steps run in the background; their progress and results appear under *Jobs* on the right. You can close the
 browser tab; the jobs keep running while the launcher window is open.
 
