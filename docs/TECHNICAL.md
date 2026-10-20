@@ -63,7 +63,7 @@ All commands run from the repo root. Each command prints a report and writes it 
 `max_new_per_day` (portfolio level), `rank_by='symbol_roi'` (free slots go to symbols whose earlier completed
 trades had the best average return; no look-ahead), `obe_min_gap` (entry only if the open is that far below the
 signal close), `add_drop_pct` (second equal block at entry × (1 − pct), filled at the open on a gap, skipped within
-`add_skip_near_stop` of the stop; the portfolio funds it from cash if available).
+`add_skip_near_stop` of the stop; the portfolio funds it from cash if available), `adr_length` (days in the ADR used for stops, default 14).
 The exit rule of the rule book is not in the excerpt we have; `strategies/rsi4_*.json` use a placeholder.
 
 ## Significance

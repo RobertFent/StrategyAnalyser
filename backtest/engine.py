@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from backtest.features import FeatureStore
-from backtest.strategy import ADR_LENGTH, StrategyParams, build_signals
+from backtest.strategy import StrategyParams, build_signals
 
 try:
     from numba import njit
@@ -167,7 +167,7 @@ def _trade_loop(open_, high, low, close, first_row, entry_sig, exit_sig, adr,
 def generate_trades(fs: FeatureStore, p: StrategyParams) -> pd.DataFrame:
     """All trades the rules generate, before any capital / position limits."""
     entry, exit_, rank = build_signals(fs, p)
-    adr = fs.get('adr', ADR_LENGTH)
+    adr = fs.get('adr', p.adr_length)
     e, x, s, ep, xp, r, ai, apx = _trade_loop(
         fs.open, fs.high, fs.low, fs.close, fs.first_row,
         np.ascontiguousarray(entry, dtype=np.bool_),

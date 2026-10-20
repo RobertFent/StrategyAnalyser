@@ -42,7 +42,7 @@ import numpy as np
 
 from backtest.features import FeatureStore
 
-ADR_LENGTH = 14
+ADR_LENGTH = 14  # default lookback of the average daily range (stops, adds); per strategy: adr_length
 DOLLAR_VOLUME_LENGTH = 20
 
 
@@ -78,6 +78,7 @@ class StrategyParams:
     obe_min_gap: float = 0.0            # 0 = off; e.g. 0.02 -> only enter if the open is >= 2% below the signal close
     add_drop_pct: float = 0.0           # 0 = off; e.g. 0.05 -> buy a second equal block if price falls 5% below entry
     add_skip_near_stop: float = 0.005   # skip the add if its price is within 0.5% of the stop
+    adr_length: int = ADR_LENGTH        # days in the average daily range used for stops / trailing stops
 
     MOMENTUM_ENTRIES = ('rs', 'breakout')
 
@@ -184,7 +185,7 @@ class StrategyParams:
         elif self.exit_rule == 'rank':
             sell.append(f'{when}: the stock has dropped out of the top {self.exit_threshold:g} by performance -> sell at the {nxt}')
         if self.stop_adr_mult:
-            sell.append(f'stop loss: entry price - {self.stop_adr_mult:g} x average daily range ({ADR_LENGTH} days)')
+            sell.append(f'stop loss: entry price - {self.stop_adr_mult:g} x average daily range ({self.adr_length} days)')
         if self.trail_adr_mult:
             sell.append(f'trailing stop: highest high since entry - {self.trail_adr_mult:g} x average daily range')
         if self.max_hold_days:
@@ -211,7 +212,7 @@ class StrategyParams:
 
 def filter_mask(fs: FeatureStore, p: StrategyParams) -> np.ndarray:
     """Rows that pass every entry condition EXCEPT the indicator itself (trend, market, liquidity, membership)."""
-    ok = ~np.isnan(fs.get('adr', ADR_LENGTH))
+    ok = ~np.isnan(fs.get('adr', p.adr_length))
     if p.trend_ma:
         ok &= fs.close > fs.get('sma', p.trend_ma)  # NaN compares False -> no trade during warm-up
     if p.market_ma:
@@ -274,7 +275,7 @@ def build_signals(fs: FeatureStore, p: StrategyParams) -> tuple[np.ndarray, np.n
         raise ValueError(f'unknown exit_rule {p.exit_rule!r}')
 
     if p.rank_by == 'volatility':
-        rank = -(fs.get('adr', ADR_LENGTH) / fs.close)
+        rank = -(fs.get('adr', p.adr_length) / fs.close)
     elif p.rank_by == 'momentum' or (p.rank_by == 'oversold' and osc is None):
         n = p.entry_length if p.entry_indicator == 'rs' else 126
         rank = -np.nan_to_num(fs.momentum(n, p.skip_days), nan=-1e9)

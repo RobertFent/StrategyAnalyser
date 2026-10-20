@@ -125,18 +125,18 @@ and after survivorship bias, below SPY.
 | SPY timing | 11.4% | −20.7% | 0.97 | 11.4% | – | – |
 | Williams %R dip-buying (`willr.json`) | 7.6% | −27.4% | 0.60 | 8.0% | 2 / 7 | 5% |
 | Momentum, best of 400 (`best_strategy.json`) | 18.5% | −28.6% | 0.81 | 26.4% | 3 / 7 | 1% |
-| RSI(4) classic rule book (`rsi4_classic.json`) | 5.2% | −13.6% | 0.53 | 5.7% | 2 / 7 | 2% |
-| RSI(4) + OBE 2% entries | 1.6% | −8.5% | 0.38 | 0.4% | 2 / 7 | 0% |
-| RSI(4) + 5% adds | 8.0% | −16.0% | 0.70 | 9.8% | 2 / 7 | 5% |
-| RSI(4) + OBE + 5% adds | 1.7% | −14.8% | 0.31 | 0.6% | 2 / 7 | 0% |
+| RSI(4) classic rule book (`rsi4_classic.json`) | 4.4% | −14.9% | 0.46 | 4.7% | 2 / 7 | 1% |
+| RSI(4) + OBE 2% entries | 1.6% | −8.7% | 0.40 | 0.4% | 2 / 7 | 0% |
+| RSI(4) + 5% adds | 7.1% | −16.3% | 0.62 | 9.9% | 2 / 7 | 3% |
+| RSI(4) + OBE + 5% adds | 1.8% | −12.8% | 0.34 | 0.5% | 2 / 7 | 0% |
 
 Notes:
 - The RSI(4) rule book (S&P 100 / Nasdaq-100, $5–$250, above the 200-day average, RSI(4) below 15, max 3 new
-  trades a day, 10 positions, prioritised by each symbol's past ROI, stop loss = entry − 4 × ADR(14)) is implemented
+  trades a day, 10 positions, prioritised by each symbol's past ROI, stop loss = entry − 4 × ADR(20)) is implemented
   as written, **but the profit exit was not in the excerpt**. The files use a placeholder (sell when RSI(4) closes
   back above 55). Replace it with the real rule before reading anything into these numbers.
 - OBE entries (only buy if the open is 2%+ below the signal close) cut the trades from ~1,600 to ~145 and the
-  return with them; 5% adds raise the return (8.0% vs 5.2%) with the 4 × ADR stop capping the damage of averaging down.
+  return with them; 5% adds raise the return (7.1% vs 4.4%) with the 4 × ADR stop capping the damage of averaging down.
 - The momentum set's 18.5% / yr includes its own tuning period; its honest number is the 7.6% / yr walk-forward above.
 - The daily returns of the dip-buying and momentum rules correlate only ~0.5, so mixing them would smooth the ride,
   but none of them earns more than SPY.

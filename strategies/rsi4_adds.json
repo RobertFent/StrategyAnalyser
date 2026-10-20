@@ -1,6 +1,6 @@
 {
   "name": "RSI(4) + 5% adds",
-  "note": "Classic rules plus: if the price falls 5% below the entry, buy a second block of the same size (doubling the position). Stop loss = entry price - 4 x ADR(14), per the rule book. PROFIT EXIT IS A PLACEHOLDER: the excerpt gives no take-profit / signal exit; set here to \"RSI(4) closes back above 55\" - replace with the real rule before trusting any number.",
+  "note": "Classic rules plus: if the price falls 5% below the entry, buy a second block of the same size (doubling the position). Stop loss = entry price - 4 x ADR(20), per the rule book. PROFIT EXIT IS A PLACEHOLDER: the excerpt gives no take-profit / signal exit; set here to \"RSI(4) closes back above 55\" - replace with the real rule before trusting any number.",
   "params": {
     "entry_indicator": "rsi",
     "entry_length": 4,
@@ -29,6 +29,7 @@
     "universe": "sp100+nasdaq100",
     "obe_min_gap": 0.0,
     "add_drop_pct": 0.05,
-    "add_skip_near_stop": 0.005
+    "add_skip_near_stop": 0.005,
+    "adr_length": 20
   }
 }

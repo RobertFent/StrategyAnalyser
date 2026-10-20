@@ -17,7 +17,7 @@ import pandas as pd
 from backtest.data import ROOT_DIR, load_benchmark, load_prices
 from backtest.features import FeatureStore
 from backtest.membership import load_membership
-from backtest.strategy import ADR_LENGTH, StrategyParams, build_signals
+from backtest.strategy import StrategyParams, build_signals
 
 
 def main() -> None:
@@ -33,7 +33,7 @@ def main() -> None:
     entry, exit_, rank = build_signals(fs, p)
     last_date = fs.dates.max()
     today = fs.dates == last_date
-    adr = fs.get('adr', ADR_LENGTH)
+    adr = fs.get('adr', p.adr_length)
 
     print(p.describe())
     print(f'\nLast close: {pd.Timestamp(last_date).date()}\n')
