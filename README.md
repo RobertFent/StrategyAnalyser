@@ -3,18 +3,85 @@
 Tests indicator-based swing trading rules on S&P 500 stocks over 10+ years, with clear buy and sell rules.
 It compares them honestly against simply holding the index.
 
-**Not a programmer?** Start with the **[Guide](docs/GUIDE.md)**. It covers setup, testing your own plan without
-coding, reading the report and paper trading.
+No programming needed: follow the quick start below. The **[Guide](docs/GUIDE.md)** explains each step in more detail.
 
-## Quick start
+## Quick start: step by step
+
+Everything runs in a Terminal opened in this folder. On a Mac: right-click the folder → *Services* →
+*New Terminal at Folder*. On Windows: open the folder, type `cmd` in the address bar, press Enter.
+You need Python 3.10 or newer ([python.org/downloads](https://www.python.org/downloads/)).
+
+### Step 0 – one-time setup (5 minutes)
 ```sh
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python3 -m backtest.fetch           # ~14 years of daily prices (1 min)
-python3 -m backtest.app             # planner in your browser: build a plan and test it with one click
-python3 -m backtest.report          # report for the reference rule set
-python3 -m backtest                 # list of all commands
+python3 tests/test_backtest.py     # prints "ok ..." 15 times if everything works
+python3 -m backtest                # lists every command
 ```
+Every later time you open a Terminal here, run only `source .venv/bin/activate` (Windows: `.venv\Scripts\activate`).
+
+### Step 1 – get the price data (2 minutes)
+```sh
+python3 -m backtest.fetch --historical
+```
+Downloads ~14 years of daily prices for every stock that was in the S&P 500 since 2016, plus SPY. The last
+line, "Member-days with prices: XX%", says how complete the history is. Backtests only buy a stock while it was
+in the index, so results are not flattered by today's winners.
+
+### Step 2 – look at the reference result (1 minute)
+```sh
+python3 -m backtest.report
+```
+Opens a one-page report in your browser for the reference rule set. Read the **Verdict** first: 7 checks, all
+must pass. Then the test-period numbers and the growth chart against SPY.
+
+### Step 3 – build and test your own plan (a few minutes per plan)
+```sh
+python3 -m backtest.app
+```
+Opens the Strategy Planner in your browser (it runs only on your computer). Pick the strategy type:
+- **Buy the dip:** an oversold indicator (RSI, Williams %R, Stochastic, Connors RSI, CCI, ...), its length and
+  level, first day or any day, trend and market filters, exits, number of positions.
+- **Follow the trend:** the strongest stocks by 3–12-month performance (top N, weekly or monthly rebalance,
+  optional "ignore the last month") or breakouts to a new N-day high; exits by rank, moving average, channel
+  low or trailing stop.
+
+Under *More options*, fill in **"Variants tried before this one"** honestly; it raises the bar for the luck check.
+Write the rules down before you look at any result, then click **Save & run backtest**. The report opens after
+about a minute. Saved plans can be reopened with *Edit* and re-run with *Report*.
+
+### Step 4 – read the result
+| Where | What to look for |
+|---|---|
+| Verdict | all 7 checks must pass before paper trading |
+| Test period (2025 – today) | the honest numbers; the rules never saw this data |
+| SPY timing | hold SPY only above its 200-day average; if a strategy can't beat this, its stock picking adds nothing |
+| Unlikely to be luck | below 90% means chance alone produces results like this |
+
+### Step 5 – stress-test a plan (optional, 1–5 minutes)
+```sh
+python3 -m backtest.analyze --params strategies/<plan>.json --quick   # verdict + luck checks, ~1 min
+python3 -m backtest.analyze --params strategies/<plan>.json           # + neighbors, costs, random entries, ~5 min
+```
+
+### Step 6 – search many rule sets (optional, 5–15 minutes)
+```sh
+python3 -m backtest.tune --space momentum --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20
+python3 -m backtest.report --params output/tuning_<timestamp>/best_params.json
+```
+Spaces: `default` (all oversold indicators), `indicators`, `breadth`, `exits`, `momentum`. Judge a search by
+"Stitched OOS" (rules re-picked each year, traded the next) against the SPY lines, not by the best in-sample score.
+Remember: the more you search, the more the best result is luck; the report deflates for that.
+
+### Step 7 – paper trade a plan that passed
+```sh
+python3 -m backtest.fetch --update                                        # daily: latest prices
+python3 -m backtest.signals --params strategies/<plan>.json --holding AAPL MSFT   # buy candidates, sell signals
+python3 -m backtest.report --params strategies/<plan>.json --start <first day> --holdout-start <first day>  # monthly check
+```
+
+Details for every step: **[docs/GUIDE.md](docs/GUIDE.md)**.
 
 ## Main finding (status 20 October 2026)
 Several thousand rule sets were tested: 10 oversold indicators, momentum and breakout rules, trend and market
