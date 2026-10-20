@@ -11,7 +11,7 @@ backtest/
   engine.py                 trade generation (numba) and portfolio simulation
   metrics.py, benchmarks.py CAGR, drawdown, Sharpe, Calmar; SPY buy & hold, SPY timing
   criteria.py               the 6 pass/fail checks used by the verdict
-  plan.py, report.py        questionnaire and HTML report (non-technical entry points)
+  app.py, plan.py, report.py  planner web app (stdlib http.server, 127.0.0.1 only), terminal questionnaire, HTML report
   run.py, analyze.py, tune.py, signals.py
   search_space.py           what tune searches
 strategies/                 rule sets as JSON

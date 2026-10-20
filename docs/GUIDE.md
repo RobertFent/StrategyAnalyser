@@ -52,21 +52,23 @@ python3 -m backtest.report --params strategies/candidate_breadth.json
 ## 3. Test your own trading plan
 
 ```sh
-python3 -m backtest.plan
+python3 -m backtest.app
 ```
-The tool asks one question at a time. Press Enter to keep the suggested value in brackets.
+This opens the **Strategy Planner** in your browser. It runs only on your own computer.
 
-- **Entry indicator:** RSI, Williams %R, Stochastic, Connors RSI, MFI, Bollinger %B, CCI, MACD, IBS or the Ultimate Oscillator.
-- **Indicator settings:** length and the "oversold" level, e.g. RSI(4) below 20.
-- **Timing:** buy only on the first day it gets there, or on any day it is there.
-- **Filters:** the stock above its 200-day average, the S&P 500 above its 200-day average.
-- **Exit:** the indicator recovers, a stop loss, a trailing stop, or a maximum number of days.
-- **Positions:** how many at the same time.
+1. **Name** the plan.
+2. **When to buy:** pick the indicator, e.g. RSI, Williams %R, Stochastic, Connors RSI or CCI. Set its length and
+   the oversold level, e.g. RSI(4) below 20, and choose whether to buy only on the first day or on any day it's there.
+3. **Filters:** the stock above its 200-day average, the S&P 500 (SPY) above its 200-day average.
+4. **When to sell:** the indicator recovers, close above yesterday's high, stop loss, trailing stop, or a maximum number of days.
+5. **Positions:** how many at the same time.
 
-At the end it shows the rules in plain English and saves them. Then:
-```sh
-python3 -m backtest.report --params strategies/<the name it printed>.json
-```
+The box on the right shows the rules in plain English while you type. Click **Save & run backtest**. After about a
+minute the report opens; *Back to the planner* takes you back. Saved plans can be reopened with **Edit** or **Report**.
+When you're done, close the Terminal window or press `Ctrl+C`.
+
+*Prefer the Terminal?* `python3 -m backtest.plan` asks the same questions one by one, and
+`python3 -m backtest.report --params strategies/<name>.json` creates the report.
 
 ### Ground rules for a fair test
 - **Write the plan down before you test it.** Test it once.

@@ -7,7 +7,8 @@ COMMANDS = [
         ('python3 -m backtest.symbols', 'refresh the index member lists from Wikipedia'),
     ]),
     ('Testing a plan (no coding)', [
-        ('python3 -m backtest.plan', 'answer questions -> saves your rules to strategies/<name>.json'),
+        ('python3 -m backtest.app', 'planner in your browser: build a plan, save it, run the report'),
+        ('python3 -m backtest.plan', 'same in the Terminal: answer questions -> strategies/<name>.json'),
         ('python3 -m backtest.report --params strategies/<name>.json', 'one-page HTML report with verdict and charts'),
     ]),
     ('Daily use', [

@@ -44,12 +44,15 @@ def _period_table(title: str, strat: dict, bms: dict) -> str:
             + _row('SPY timing', bms['SPY timing (>SMA200)']) + '</tbody></table></div>')
 
 
-def build(params_path: Path, index: str, start: str, holdout_start: str, cost_bps: float) -> Path:
+def build(params_path: Path, index: str | None, start: str, holdout_start: str, cost_bps: float,
+          fs: FeatureStore | None = None) -> Path:
+    """Backtest the rule set in params_path and write the HTML report. Pass a cached `fs` to skip loading data."""
     p = StrategyParams.load(params_path)
     meta = json.loads(params_path.read_text())
     note = meta.get('note', '')
     bench = load_benchmark('SPY')
-    fs = FeatureStore(load_prices(index), bench)
+    if fs is None:
+        fs = FeatureStore(load_prices(index), bench)
     cost = cost_bps / 1e4
     trades = generate_trades(fs, p)
     tune_end = pd.Timestamp(holdout_start) - pd.Timedelta(days=1)
@@ -246,6 +249,7 @@ footer { color: var(--text-3); font-size: 13px; margin-top: 18px; text-align: ce
 <body>
 <main>
 <header>
+  <a id="back" href="/" style="display:none;color:var(--s1);font-size:14px;text-decoration:none">&larr; Back to the planner</a>
   <h1>{{TITLE}}</h1>
   <p class="sub">Backtest on S&amp;P 500 stocks · {{PERIOD}} · costs {{COST}} bps per trade side</p>
 </header>
@@ -433,6 +437,7 @@ function draw() {
   barChart('yearly');
 }
 draw();
+if (location.protocol.startsWith('http')) document.getElementById('back').style.display = 'inline-block';
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(draw, 150); });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
 </script>

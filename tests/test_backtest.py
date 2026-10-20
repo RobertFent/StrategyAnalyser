@@ -84,6 +84,18 @@ def test_describe_all_indicators():
         assert text.startswith('BUY') and 'SELL' in text and 'POSITIONS' in text
 
 
+def test_planner_form_conversion():
+    from backtest.app import params_from_form
+    p = params_from_form({'entry_indicator': 'willr', 'entry_length': '10', 'entry_level': '-90',
+                          'exit_rule': 'osc', 'exit_level': '-60', 'trend_ma': '200', 'max_positions': '5'})
+    assert p.entry_threshold == 10 and p.exit_threshold == 40 and p.max_positions == 5
+    try:
+        params_from_form({'entry_indicator': 'rsi', 'exit_rule': 'none'})
+        assert False, 'plan without any exit must be rejected'
+    except ValueError:
+        pass
+
+
 def test_willr_scale():
     p = synthetic_prices(1)
     fs = FeatureStore(p)

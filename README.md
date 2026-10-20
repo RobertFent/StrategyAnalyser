@@ -11,8 +11,8 @@ coding, reading the report and paper trading.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 -m backtest.fetch           # ~14 years of daily prices (1 min)
-python3 -m backtest.report          # opens the report for the reference rule set
-python3 -m backtest.plan            # write down your own plan by answering questions
+python3 -m backtest.app             # planner in your browser: build a plan and test it with one click
+python3 -m backtest.report          # report for the reference rule set
 python3 -m backtest                 # list of all commands
 ```
 
