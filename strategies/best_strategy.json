@@ -1,5 +1,5 @@
 {
-  "name": "Best of search: momentum top 30 (3 months, weekly)",
+  "name": "Best of search: momentum top 30 (6 months, monthly)",
   "note": "Best of 400 momentum/breakout rule sets on 2016-2024 with point-in-time index membership. Walk-forward 2019-24: 6.8% CAGR, -38% drawdown (SPY 17.1%). Holdout 2025+: -4.6%. Deflated luck check: 1%. Kept only as a reference for what momentum looks like here - do not trade.",
   "params": {
     "entry_indicator": "rs",

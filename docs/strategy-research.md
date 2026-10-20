@@ -141,6 +141,27 @@ Notes:
 - The daily returns of the dip-buying and momentum rules correlate only ~0.5, so mixing them would smooth the ride,
   but none of them earns more than SPY.
 
+### 6. The momentum plan in practice (21 Oct)
+`best_strategy.json` is the best of 400 momentum / breakout rule sets. The rules:
+
+- **Buy:** on the first trading day of each month, every S&P 500 stock that newly entered the top 30 by 6-month
+  performance (price ≥ $5, ≥ $5M traded per day). Buy at the next open, 10% of the account each, max 10 positions;
+  with more signals than free slots, take the strongest.
+- **Sell:** when the close is below the 200-day average, at the next open. No stop loss, no target.
+- In practice: one look per month, ~15 trades a year, median hold about 6 months, 46% of trades win; the few big
+  winners (STX +363%, AMD +204%, FIX +45% in 2025–26) pay for many −20…−30% losers (HOOD, LUV, DOW, SMCI).
+
+| | Return / yr | Worst drop | Not luck |
+|---|---|---|---|
+| 2016 – Oct 2026 incl. the years the rules were picked on | 18.5% | −28.6% | 1% |
+| Walk-forward 2019–24 (rules re-picked each year, traded the next) | 6.8% | −38% | – |
+| Test period 2025 – today (never used to pick rules) | −4.6% | −21.8% | – |
+| SPY buy & hold, same periods | 15.1% / 17.1% / 17.6% | −33.7% | – |
+
+Verdict 3 / 7. The 18.5% is the number that made it "best", and it is the one not to trust: it was selected on
+that data. Every honest view (walk-forward, test period, luck check) is below SPY. Fit for paper trading as an
+exercise in following rules, not for real money yet.
+
 ## What we learned
 1. **The 200-day trend filter does most of the work.** Without it, returns halve and drawdowns double. Holding only SPY above its 200-day average gets a similar Sharpe (0.97) with no stock picking at all.
 2. **An oversold reading has no edge on its own.** Trades entered on an oversold signal average +0.49%. Random entries in the same stock, year and holding time average +0.47%. The signal raises the win rate (69% vs 55%) but the losses get bigger, so the average stays the same.
