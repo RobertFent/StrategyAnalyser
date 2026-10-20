@@ -17,25 +17,26 @@ def evaluate(full: dict, holdout: dict, stressed: dict,
     """Returns (criterion, passed, detail) rows."""
     pct = lambda x: f'{x * 100:.1f}%'
     return [
-        ('Holdout makes money', holdout['cagr'] > HOLDOUT_MIN_CAGR,
-         f'holdout CAGR {pct(holdout["cagr"])}'),
-        (f'Holdout >= {HOLDOUT_MIN_SHARE_OF_SPY:.0%} of SPY', holdout['cagr'] >= HOLDOUT_MIN_SHARE_OF_SPY * spy_holdout['cagr'],
-         f'{pct(holdout["cagr"])} vs SPY {pct(spy_holdout["cagr"])}'),
-        (f'Sharpe >= SPY + {SHARPE_MARGIN_OVER_SPY}', full['sharpe'] >= spy_full['sharpe'] + SHARPE_MARGIN_OVER_SPY,
-         f'{full["sharpe"]:.2f} vs SPY {spy_full["sharpe"]:.2f}'),
-        ('Holdout beats SPY timing (Sharpe+Calmar)',
+        ('Makes money in the test period', holdout['cagr'] > HOLDOUT_MIN_CAGR,
+         f'{pct(holdout["cagr"])} per year'),
+        (f'Test period: at least {HOLDOUT_MIN_SHARE_OF_SPY:.0%} of SPY\'s return',
+         holdout['cagr'] >= HOLDOUT_MIN_SHARE_OF_SPY * spy_holdout['cagr'],
+         f'{pct(holdout["cagr"])} vs SPY {pct(spy_holdout["cagr"])} per year'),
+        ('Clearly smoother ride than SPY', full['sharpe'] >= spy_full['sharpe'] + SHARPE_MARGIN_OVER_SPY,
+         f'Sharpe {full["sharpe"]:.2f} vs SPY {spy_full["sharpe"]:.2f} (needs +{SHARPE_MARGIN_OVER_SPY})'),
+        ('Test period: beats simple SPY timing',
          holdout['sharpe'] > timing_holdout['sharpe'] and holdout['calmar'] > timing_holdout['calmar'],
          f'Sharpe {holdout["sharpe"]:.2f} vs {timing_holdout["sharpe"]:.2f}, '
          f'Calmar {holdout["calmar"]:.2f} vs {timing_holdout["calmar"]:.2f}'),
-        (f'Survives {STRESS_COST_BPS} bps costs', stressed['sharpe'] >= spy_full['sharpe'],
-         f'Sharpe at {STRESS_COST_BPS} bps {stressed["sharpe"]:.2f} vs SPY {spy_full["sharpe"]:.2f}'),
-        ('Smaller drawdown than SPY', full['max_drawdown'] > spy_full['max_drawdown'],
+        ('Still works with double trading costs', stressed['sharpe'] >= spy_full['sharpe'],
+         f'Sharpe {stressed["sharpe"]:.2f} at {STRESS_COST_BPS:g} bps vs SPY {spy_full["sharpe"]:.2f}'),
+        ('Smaller worst drop than SPY', full['max_drawdown'] > spy_full['max_drawdown'],
          f'{pct(full["max_drawdown"])} vs SPY {pct(spy_full["max_drawdown"])}'),
     ]
 
 
 def format_verdict(rows: list[tuple[str, bool, str]]) -> list[str]:
-    lines = [f'  [{"PASS" if ok else "FAIL"}] {name:<36} {detail}' for name, ok, detail in rows]
+    lines = [f'  [{"PASS" if ok else "FAIL"}] {name:<42} {detail}' for name, ok, detail in rows]
     passed = sum(ok for _, ok, _ in rows)
     lines.append(f'  => {passed}/{len(rows)} passed: '
                  + ('ADOPT (then paper-trade first)' if passed == len(rows) else 'DO NOT ADOPT'))

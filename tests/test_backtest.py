@@ -76,6 +76,14 @@ def test_new_oscillators_are_causal_and_bounded():
         assert np.allclose(fs.oscillator(name, n)[past], fs2.oscillator(name, n)[past], equal_nan=True), name
 
 
+def test_describe_all_indicators():
+    from backtest.features import OSCILLATORS
+    for ind in OSCILLATORS:
+        text = StrategyParams(entry_indicator=ind, entry_length=14, trend_ma=200, market_ma=200,
+                              stop_adr_mult=3, trail_adr_mult=2, max_hold_days=10, breadth_min=0.1).describe()
+        assert text.startswith('BUY') and 'SELL' in text and 'POSITIONS' in text
+
+
 def test_willr_scale():
     p = synthetic_prices(1)
     fs = FeatureStore(p)

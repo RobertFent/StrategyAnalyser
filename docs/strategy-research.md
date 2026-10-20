@@ -48,12 +48,12 @@ Several thousand rule sets in total. Each is listed with the command that reprod
 
 | Criterion | current.json | candidate_breadth | best CCI |
 |---|---|---|---|
-| Holdout makes money | PASS | PASS | FAIL |
-| Holdout ≥ 70% of SPY | FAIL (7.3% vs 17.4%) | PASS | FAIL |
-| Sharpe ≥ SPY + 0.2 (2016–now) | PASS (1.13 vs 0.88) | FAIL (1.01) | FAIL |
-| Holdout beats SPY timing | FAIL (Sharpe 0.54 vs 0.99) | FAIL (Calmar 1.09 vs 1.10) | FAIL |
-| Survives 0.10% costs | PASS (just) | PASS | FAIL |
-| Smaller drawdown than SPY | PASS | PASS | PASS |
+| Makes money in the test period | PASS | PASS | FAIL |
+| Test period: at least 70% of SPY's return | FAIL (7.3% vs 17.4%) | PASS | FAIL |
+| Clearly smoother ride than SPY (Sharpe +0.2, 2016–now) | PASS (1.13 vs 0.88) | FAIL (1.01) | FAIL |
+| Test period: beats simple SPY timing | FAIL (Sharpe 0.54 vs 0.99) | FAIL (Calmar 1.09 vs 1.10) | FAIL |
+| Still works with double trading costs | PASS (just) | PASS | FAIL |
+| Smaller worst drop than SPY | PASS | PASS | PASS |
 | **Result** | **4/6 – do not adopt** | **4/6 – do not adopt** | **1/6 – do not adopt** |
 
 ## What we learned
@@ -71,12 +71,11 @@ Several thousand rule sets in total. Each is listed with the command that reprod
 - **Searching more parameters or indicators won't change this.** It only produces more lucky in-sample winners.
 
 ## Next steps
-1. **Test the trading plan as a fixed hypothesis.** Write its rules into `strategies/coach_plan.json` before looking at any result, then run
-   `python3 -m backtest.analyze --params strategies/coach_plan.json` once. The VERDICT section decides. Do not tune afterwards.
-2. **Forward test (paper trade) for 3–6 months.** Do this for `current.json` and, if it passes, the coach plan:
-   - Daily: `python3 -m backtest.fetch --update && python3 -m backtest.signals --params strategies/current.json`.
-   - Monthly: `python3 -m backtest.run --params strategies/current.json --start 2026-10-20` shows exactly what the rules did since today, compared with SPY and SPY timing.
-3. **If the drawdown reduction is the goal**, compare honestly with SPY timing. It is simpler, cheaper and shows similar risk-adjusted results.
+1. **Test the coach's trading plan as a fixed hypothesis.** Run `python3 -m backtest.plan`, answer the questions
+   before looking at any result, then run `python3 -m backtest.report --params strategies/<plan>.json` once.
+   The verdict decides. Don't tweak afterwards. To compare variants, decide all of them up front and report every one.
+2. **Paper trade for 3–6 months** whatever passes, and `current.json` for comparison. How to do it is in [GUIDE.md](GUIDE.md), section 5.
+3. **If smaller drops are the goal**, compare honestly with SPY timing. It is simpler, cheaper and shows similar risk-adjusted results.
 4. **Before trusting any result**, fix survivorship bias with historical index membership.
 5. **Open ideas** (only as fixed hypotheses, not new searches):
    - a cap on positions per sector
@@ -92,5 +91,6 @@ python3 -m backtest.tune --space breadth    --start 2016-01-01 --holdout-start 2
 python3 -m backtest.tune --space exits      --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 600
 python3 -m backtest.tune --space indicators --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 800
 python3 -m backtest.analyze --params strategies/current.json            # add --quick for verdict only
+python3 -m backtest.report  --params strategies/current.json            # one-page HTML report
 ```
 Random search uses `--seed 42`. Numbers can move slightly when the data is re-downloaded, because adjusted prices and index members change.

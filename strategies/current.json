@@ -1,5 +1,6 @@
 {
-  "note": "Reference rule set (2026-10-19). Filters forced search, best Calmar 2016-2024. Walk-forward OOS 2019-24: 12.4% CAGR, -21.5% DD, Sharpe 0.92. Holdout 2025-10/2026: 8.0% CAGR, -12.8% DD (SPY 17.4%).",
+  "name": "Reference: Williams %R dip-buying",
+  "note": "Best rule set from the search with the trend and market filter always on (picked on 2016-2024). Realistic expectation: about 10-14% per year with smaller drops than SPY.",
   "params": {
     "entry_indicator": "willr",
     "entry_length": 10,

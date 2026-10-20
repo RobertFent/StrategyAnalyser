@@ -1,5 +1,6 @@
 {
-  "note": "TEMPLATE - replace the values with the rules of your trading plan BEFORE looking at any result, then run: python3 -m backtest.analyze --params strategies/coach_plan.json. Do not tune it afterwards. Oscillators use 0..100, low = oversold (Williams %R -90 = 10). Options for each field: see backtest/strategy.py.",
+  "name": "Your trading plan",
+  "note": "TEMPLATE - create your own with: python3 -m backtest.plan  (or edit the values below). Write the rules down BEFORE looking at results and do not tweak them afterwards.",
   "params": {
     "entry_indicator": "rsi",
     "entry_length": 4,

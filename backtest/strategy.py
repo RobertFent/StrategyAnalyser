@@ -94,41 +94,53 @@ class StrategyParams:
         return replace(self, **kw)
 
     def describe(self) -> str:
-        name = {'rsi': 'RSI', 'willr': 'Williams %R', 'stoch': 'Stoch %K', 'ibs': 'IBS', 'mfi': 'MFI',
-                'bbp': 'Bollinger %B', 'crsi': 'Connors RSI', 'uo': 'Ultimate Osc', 'macd': 'MACD-hist rank',
-                'cci': 'CCI rank'}
+        """The rules in plain English."""
+        name = {'rsi': 'RSI', 'willr': 'Williams %R', 'stoch': 'Stochastic %K', 'ibs': 'IBS (close within the day\'s range)',
+                'mfi': 'Money Flow Index', 'bbp': 'Bollinger %B', 'crsi': 'Connors RSI', 'uo': 'Ultimate Oscillator',
+                'macd': 'MACD histogram rank', 'cci': 'CCI rank'}
+
         def lvl(ind: str, v: float) -> str:
             return f'{v - 100:g}' if ind == 'willr' else f'{v:g}'
+
+        def label(ind: str, n: int) -> str:
+            if ind in ('ibs', 'uo'):
+                return name[ind]
+            if ind in ('macd', 'cci', 'crsi'):
+                return f'{name[ind]} ({n}-day window)'
+            return f'{name[ind]}({n})'
+
         ind, xind = self.entry_indicator, self.exit_ind
-        e_len = '' if ind in ('ibs', 'uo') else f'({self.entry_length})'
-        x_len = '' if xind in ('ibs', 'uo') else f'({self.exit_len})'
-        when = 'first close' if self.entry_mode == 'cross' else 'any close'
-        lines = [f'ENTRY: {when} with {name[ind]}{e_len} < {lvl(ind, self.entry_threshold)}']
-        if self.trend_ma:
-            lines.append(f'       and Close > SMA({self.trend_ma})')
-        if self.market_ma:
-            lines.append(f'       and SPY > SMA({self.market_ma})')
-        lines.append(f'       and price >= ${self.min_price:g}, avg $vol(20) >= ${self.min_dollar_volume / 1e6:g}M')
-        lines.append('       -> buy ' + ('next day at the open' if self.execution == 'next_open' else 'at the close'))
-        sell = 'next open' if self.execution == 'next_open' else 'at the close'
-        exits = []
-        if self.exit_rule == 'osc':
-            exits.append(f'{name[xind]}{x_len} > {lvl(xind, self.exit_threshold)} at close -> sell {sell}')
-        elif self.exit_rule == 'prev_high':
-            exits.append(f"close > yesterday's high -> sell {sell}")
-        if self.stop_adr_mult:
-            exits.append(f'stop loss at entry - {self.stop_adr_mult:g} x ADR({ADR_LENGTH})')
-        if self.trail_adr_mult:
-            exits.append(f'trailing stop at highest high - {self.trail_adr_mult:g} x ADR({ADR_LENGTH})')
-        lines.append('EXIT:  ' + (exits[0] if exits else 'time stop only'))
-        lines += [f'       or {e}' for e in exits[1:]]
-        if self.max_hold_days:
-            lines.append(f'       or after {self.max_hold_days} trading days')
+        nxt = 'next day\'s open' if self.execution == 'next_open' else 'same close'
+        how = 'drops below' if self.entry_mode == 'cross' else 'is below'
+        buy = [f'{label(ind, self.entry_length)} {how} {lvl(ind, self.entry_threshold)}']
         if self.breadth_min:
-            lines.insert(1, f'       and >= {self.breadth_min * 100:g}% of the universe is below that level the same day')
-        lines.append(f'SLOTS: {self.max_positions} equal-weight positions, '
-                     + ('most oversold signals first' if self.rank_by == 'oversold'
-                        else 'most volatile (ADR%) signals first'))
+            buy.append(f'at least {self.breadth_min * 100:g}% of all stocks are that oversold on the same day')
+        if self.trend_ma:
+            buy.append(f'the stock is above its {self.trend_ma}-day average')
+        if self.market_ma:
+            buy.append(f'SPY is above its {self.market_ma}-day average')
+        buy.append(f'price at least ${self.min_price:g}, average daily trading value at least '
+                   f'${self.min_dollar_volume / 1e6:g}M')
+        sell = []
+        if self.exit_rule == 'osc':
+            sell.append(f'{label(xind, self.exit_len)} rises above {lvl(xind, self.exit_threshold)} '
+                        f'-> sell at the {nxt}')
+        elif self.exit_rule == 'prev_high':
+            sell.append(f"the close is above yesterday's high -> sell at the {nxt}")
+        if self.stop_adr_mult:
+            sell.append(f'stop loss: entry price - {self.stop_adr_mult:g} x average daily range ({ADR_LENGTH} days)')
+        if self.trail_adr_mult:
+            sell.append(f'trailing stop: highest high since entry - {self.trail_adr_mult:g} x average daily range')
+        if self.max_hold_days:
+            sell.append(f'after {self.max_hold_days} trading days -> sell at the {nxt}')
+        pick = 'the most oversold' if self.rank_by == 'oversold' else 'the most volatile'
+        lines = ['BUY when all of these are true at the close:']
+        lines += [f'  - {b}' for b in buy]
+        lines.append(f'  -> buy at the {nxt}')
+        lines.append('SELL at the first of:')
+        lines += [f'  - {x}' for x in (sell or ['never (no exit rule set)'])]
+        lines.append(f'POSITIONS: up to {self.max_positions} at once, {100 / self.max_positions:g}% of the account each; '
+                     f'if there are more signals than free spots, take {pick}')
         return '\n'.join(lines)
 
 

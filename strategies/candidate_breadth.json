@@ -1,5 +1,6 @@
 {
-  "note": "Candidate: broad-pullback variant (breadth space), 5 slots. Holdout 2025+: 18.3% CAGR, -16.8% DD, but walk-forward selection in this space was unstable (OOS 6.2% CAGR, -39% DD). Paper-trade before use.",
+  "name": "Candidate: buy broad market pullbacks",
+  "note": "Only buys when many S&P 500 stocks are oversold at the same time, with 5 bigger positions. Strong 2025-26, but unstable in earlier tests - paper trade before using.",
   "params": {
     "entry_indicator": "rsi",
     "entry_length": 5,
