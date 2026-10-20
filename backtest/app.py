@@ -470,6 +470,7 @@ a { color: var(--accent); }
         <option value="0" selected>none</option><option value="1">1 year</option><option value="3">3 years</option><option value="5">5 years</option></select></label>
       <label class="f">OBE entries only<select name="obe_pct">
         <option value="0" selected>off</option><option value="2">open at least 2% below the signal close</option>
+        <option value="3">open at least 3% below the signal close</option>
         <option value="4">open at least 4% below the signal close</option></select></label>
       <label class="f">Add a second block<select name="add_pct">
         <option value="0" selected>off</option><option value="5">if the price falls 5% below entry</option>

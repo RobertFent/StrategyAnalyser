@@ -116,7 +116,7 @@ Searching, stress tests and engine details: [docs/TECHNICAL.md](docs/TECHNICAL.m
 ## What's in here
 | Folder | Contents |
 |---|---|
-| `strategies/` | saved rule sets: `willr.json` (dip-buying reference), `best_strategy.json` (best of the momentum search), `rsi4_*.json` (RSI(4) rule book: classic, OBE, 5% adds), `candidate_breadth.json`, `coach_plan.json` (template), plus your own |
+| `strategies/` | saved rule sets: `willr.json` (dip-buying reference), `best_strategy.json` (best of the momentum search), `rsi4_*.json` (RSI(4) rule book: classic, OBE 2/3/4%, 5% adds), `candidate_breadth.json`, `coach_plan.json` (template), plus your own |
 | `symbols/` | index lists and `sp500_membership.csv` (who was in the S&P 500 when) |
 | `docs/` | guide, findings, technical notes |
 | `backtest/` | the code (`python3 -m backtest.<command>`) |
