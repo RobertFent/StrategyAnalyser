@@ -6,11 +6,14 @@ stress tests and how the engine works. Non-technical guide: [GUIDE.md](GUIDE.md)
 ```
 backtest/
   fetch.py, symbols.py      data download (Yahoo Finance, Wikipedia index lists)
-  features.py               indicators, all oscillators on a 0..100 scale (low = oversold)
+  features.py               indicators (oscillators on a 0..100 scale, low = oversold), momentum,
+                            cross-sectional rank, rebalance days, point-in-time eligibility
+  membership.py             S&P 500 membership history -> symbols/sp500_membership.csv
+  significance.py           bootstrap excess vs SPY, deflated Sharpe, random-entry Monte Carlo
   strategy.py               StrategyParams: the rule set + plain-English describe()
   engine.py                 trade generation (numba) and portfolio simulation
   metrics.py, benchmarks.py CAGR, drawdown, Sharpe, Calmar; SPY buy & hold, SPY timing
-  criteria.py               the 6 pass/fail checks used by the verdict
+  criteria.py               the 7 pass/fail checks used by the verdict
   app.py, plan.py, report.py  planner web app (stdlib http.server, 127.0.0.1 only), terminal questionnaire, HTML report
   run.py, analyze.py, tune.py, signals.py
   search_space.py           what tune searches
@@ -45,6 +48,20 @@ All commands run from the repo root. Each command prints a report and writes it 
 - **Caveat:** `symbols/` holds today's index members, so stocks that dropped out are missing (survivorship bias). Expect live results to be lower.
 
 **Benchmarks:** "SPY timing" means holding SPY only while it is above its 200-day average, otherwise cash. A stock-picking strategy that can't beat it gets its edge from the trend filter, not from picking stocks.
+
+## Strategy families
+- **Mean reversion:** `entry_indicator` = oscillator, entry when it is below `entry_threshold` (first day or any day).
+- **Momentum:** `entry_indicator='rs'` ranks all eligible stocks by `momentum(entry_length, skip_days)` on rebalance
+  days and buys the top `entry_threshold`; `'breakout'` buys a close above the previous `entry_length`-day high.
+  Exits: `rank` (dropped below rank `exit_threshold`), `ma`, `channel`, trailing stop, time.
+- **Membership:** `FeatureStore.eligible` marks rows where the ticker was in the index; entries, breadth and
+  momentum ranks use only eligible rows. Positions are held through a removal until the exit rule fires.
+
+## Significance
+`backtest.significance`: `bootstrap_excess` (stationary block bootstrap, 20-day blocks, of daily strategy − SPY),
+`deflated_sharpe` (PSR/DSR with skew and kurtosis; `trials` sets the expected maximum Sharpe of zero-skill
+strategies), `random_entry_test` (same trades, random entry days among days that pass the same filters, run
+through the portfolio simulation). The verdict uses the smaller of the bootstrap and the deflated probability.
 
 ## How the engine works
 - **Signals** are computed at the close of day t from data up to t only. A test checks that changing future prices never changes past trades.

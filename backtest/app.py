@@ -22,6 +22,7 @@ from urllib.parse import unquote, urlparse
 
 from backtest.data import OUTPUT_DIR, ROOT_DIR, load_benchmark, load_prices
 from backtest.features import FeatureStore
+from backtest.membership import load_membership
 from backtest.strategy import StrategyParams
 
 STRATEGY_DIR = ROOT_DIR / 'strategies'
@@ -40,6 +41,11 @@ INDICATORS = [
     ('uo', 'Ultimate Oscillator', 'Buying pressure over 7, 14 and 28 days.', False, 0, '', 30, 60, '0 to 100 (e.g. 30)'),
 ]
 IND_KEYS = {i[0] for i in INDICATORS}
+MOMENTUM_ENTRIES = {
+    'rs': 'Relative strength: the stock is among the top N of all stocks by performance over the lookback.',
+    'breakout': 'Breakout: the close is above the highest high of the previous N days.',
+}
+EXIT_RULES = ('osc', 'prev_high', 'channel', 'ma', 'rank', 'none')
 
 _FS_CACHE: dict[str, FeatureStore] = {}
 _FS_LOCK = threading.Lock()
@@ -48,7 +54,7 @@ _FS_LOCK = threading.Lock()
 def feature_store(index: str = 'sp500') -> FeatureStore:
     with _FS_LOCK:
         if index not in _FS_CACHE:
-            _FS_CACHE[index] = FeatureStore(load_prices(index), load_benchmark('SPY'))
+            _FS_CACHE[index] = FeatureStore(load_prices(index), load_benchmark('SPY'), load_membership(index))
         return _FS_CACHE[index]
 
 
@@ -58,11 +64,44 @@ def slugify(text: str) -> str:
 
 def params_from_form(f: dict) -> StrategyParams:
     """Form values (native indicator scale) -> StrategyParams (0..100 scale)."""
+    family = f.get('family', 'reversion')
+    num = lambda k, d=0.0: float(f.get(k, d) or 0)
+    if family == 'momentum':
+        ind = f.get('mom_entry', 'rs')
+        if ind not in MOMENTUM_ENTRIES:
+            raise ValueError('Unknown momentum entry')
+        exit_rule = f.get('mom_exit', 'rank')
+        if exit_rule not in ('rank', 'ma', 'channel', 'none'):
+            raise ValueError('Unknown exit rule')
+        if ind == 'breakout' and exit_rule == 'rank':
+            exit_rule = 'ma'
+        p = StrategyParams(
+            entry_indicator=ind,
+            entry_length=int(num('mom_lookback', 126)),
+            entry_threshold=num('mom_top', 20),
+            skip_days=int(num('skip_days', 0)),
+            rebalance=('daily' if ind == 'breakout' else
+                       f.get('rebalance', 'monthly') if f.get('rebalance') in ('daily', 'weekly', 'monthly') else 'monthly'),
+            exit_rule=exit_rule,
+            exit_threshold=num('mom_exit_rank', 50),
+            exit_length=int(num('mom_exit_length', 100)),
+            trend_ma=int(num('trend_ma')), market_ma=int(num('market_ma')),
+            stop_adr_mult=num('stop_adr_mult'), trail_adr_mult=num('trail_adr_mult'),
+            max_hold_days=int(num('max_hold_days')),
+            rank_by='momentum',
+            max_positions=max(1, int(num('max_positions', 10))),
+            min_price=num('min_price', 5),
+            min_dollar_volume=num('min_dollar_volume_m', 5) * 1e6,
+        )
+        if p.entry_length < 5 or p.entry_threshold < 1 or p.max_positions > 50:
+            raise ValueError('Please check the numbers (lookback at least 5 days, top N at least 1, at most 50 positions).')
+        if p.exit_rule == 'none' and not (p.stop_adr_mult or p.trail_adr_mult or p.max_hold_days):
+            raise ValueError('Without an exit signal you need a stop, a trailing stop or a maximum number of days.')
+        return p
     ind = f.get('entry_indicator', 'rsi')
     if ind not in IND_KEYS:
         raise ValueError('Unknown indicator')
     shift = 100.0 if ind == 'willr' else 0.0
-    num = lambda k, d=0.0: float(f.get(k, d) or 0)
     p = StrategyParams(
         entry_indicator=ind,
         entry_length=int(num('entry_length')),
@@ -167,7 +206,7 @@ class Handler(BaseHTTPRequestHandler):
                 from backtest.report import build  # imported lazily: keeps start-up fast
                 out = build(file, 'sp500', body.get('start') or '2016-01-01',
                             body.get('holdout_start') or '2025-01-01', float(body.get('cost_bps') or 5),
-                            fs=feature_store('sp500'))
+                            fs=feature_store('sp500'), trials=max(1, int(body.get('trials') or 1)))
                 return self._json({'url': f'/reports/{out.name}'})
         except FileNotFoundError as e:
             return self._json({'error': f'{e}'}, 400)
@@ -302,6 +341,32 @@ a { color: var(--accent); }
 
   <div class="step"><span class="n">2</span><h3>When to buy</h3></div>
   <div class="grid">
+    <div class="full">
+      <div class="hint" style="margin-bottom:6px">Strategy type</div>
+      <div class="seg">
+        <label><input type="radio" name="family" value="reversion" checked><span>Buy the dip (oversold indicator)</span></label>
+        <label><input type="radio" name="family" value="momentum"><span>Follow the trend (momentum / breakout)</span></label>
+      </div>
+    </div>
+  </div>
+  <div class="grid" id="momBlock" style="display:none">
+    <label class="f full">Entry<select name="mom_entry" id="momEntry">
+      <option value="rs">Relative strength: among the strongest stocks</option>
+      <option value="breakout">Breakout: new N-day high</option></select><small id="momHelp"></small></label>
+    <label class="f"><span id="lookbackLabel">Performance over the last</span><select name="mom_lookback">
+      <option value="63">3 months</option><option value="126" selected>6 months</option>
+      <option value="189">9 months</option><option value="252">12 months</option>
+      <option value="50">50 days</option><option value="100">100 days</option><option value="20">20 days</option></select></label>
+    <label class="f" id="topWrap">Buy if among the top<select name="mom_top">
+      <option value="5">5 stocks</option><option value="10">10 stocks</option><option value="20" selected>20 stocks</option>
+      <option value="30">30 stocks</option><option value="50">50 stocks</option></select></label>
+    <label class="f" id="skipWrap">Ignore the most recent<select name="skip_days">
+      <option value="0" selected>nothing</option><option value="10">2 weeks</option><option value="21">1 month</option></select>
+      <small>classic "12-1 momentum" skips the last month</small></label>
+    <label class="f" id="rebWrap">Check and rebalance<select name="rebalance">
+      <option value="monthly" selected>monthly</option><option value="weekly">weekly</option><option value="daily">daily</option></select></label>
+  </div>
+  <div class="grid" id="oscBlock">
     <label class="f full">Indicator<select name="entry_indicator" id="ind"></select><small id="indHelp"></small></label>
     <label class="f" id="lenWrap"><span id="lenLabel">Length (days)</span><input type="number" name="entry_length" min="1" step="1"></label>
     <label class="f">Buy when it is below<input type="number" name="entry_level" step="any"><small id="scaleHint"></small></label>
@@ -325,8 +390,19 @@ a { color: var(--accent); }
   </div>
 
   <div class="step"><span class="n">4</span><h3>When to sell</h3></div>
+  <div class="grid" id="momExitBlock" style="display:none">
+    <label class="f">Exit signal<select name="mom_exit" id="momExit">
+      <option value="rank" selected>Drops out of the strongest stocks</option>
+      <option value="ma">Close below a moving average</option>
+      <option value="channel">Close below the lowest low of N days</option>
+      <option value="none">No signal (stops / time only)</option></select></label>
+    <label class="f" id="momExitRankWrap">Sell when no longer in the top<select name="mom_exit_rank">
+      <option value="20">20</option><option value="30">30</option><option value="50" selected>50</option><option value="100">100</option></select></label>
+    <label class="f" id="momExitLenWrap" style="display:none">Length (days)<select name="mom_exit_length">
+      <option value="20">20</option><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option></select></label>
+  </div>
   <div class="grid">
-    <label class="f">Exit signal<select name="exit_rule" id="exitRule">
+    <label class="f" id="oscExitRule">Exit signal<select name="exit_rule" id="exitRule">
       <option value="osc">Indicator rises above a level</option>
       <option value="prev_high">Close above yesterday's high</option>
       <option value="none">No signal (stops / time only)</option></select></label>
@@ -341,7 +417,8 @@ a { color: var(--accent); }
     <label class="f">Sell after at most<select name="max_hold_days">
       <option value="0">No limit</option><option value="5">5 trading days</option>
       <option value="10" selected>10 trading days</option><option value="20">20 trading days</option>
-      <option value="40">40 trading days</option></select></label>
+      <option value="40">40 trading days</option><option value="60">60 trading days</option>
+      <option value="120">120 trading days</option><option value="250">250 trading days</option></select></label>
   </div>
 
   <div class="step"><span class="n">5</span><h3>Positions</h3></div>
@@ -349,7 +426,7 @@ a { color: var(--accent); }
     <label class="f">Positions at the same time<select name="max_positions">
       <option value="3">3 (33% each)</option><option value="5">5 (20% each)</option>
       <option value="10" selected>10 (10% each)</option><option value="20">20 (5% each)</option></select></label>
-    <label class="f">More signals than free spots? Take<select name="rank_by">
+    <label class="f" id="rankWrap">More signals than free spots? Take<select name="rank_by">
       <option value="oversold" selected>the most oversold</option><option value="volatility">the most volatile</option></select></label>
   </div>
 
@@ -363,6 +440,7 @@ a { color: var(--accent); }
         <option value="2">0.02%</option><option value="5" selected>0.05%</option><option value="10">0.10%</option><option value="20">0.20%</option></select></label>
       <label class="f">Minimum stock price ($)<input type="number" name="min_price" value="5" min="0" step="any"></label>
       <label class="f">Min. daily trading value ($ millions)<input type="number" name="min_dollar_volume_m" value="5" min="0" step="any"></label>
+      <label class="f">Variants tried before this one<input type="number" name="trials" value="1" min="1" step="1"><small>be honest: each variant you tried raises the bar for "not luck"</small></label>
       <label class="f">Backtest from<input type="text" name="start" value="2016-01-01"><small>YYYY-MM-DD</small></label>
       <label class="f">Test period from<input type="text" name="holdout_start" value="2025-01-01"><small>never used to pick rules</small></label>
       <label class="f full">Notes (optional)<textarea name="note" maxlength="500" placeholder="Where does this plan come from?"></textarea></label>
@@ -415,6 +493,28 @@ function applyIndicator(setDefaults) {
   }
 }
 function applyExit() { $('exitWrap').style.display = $('exitRule').value === 'osc' ? '' : 'none'; }
+const MOM_HELP = {rs: 'The stock is among the strongest N of all S&P 500 stocks by performance over the lookback.',
+                  breakout: 'The close is above the highest high of the previous N days (use the day lengths).'};
+function applyFamily() {
+  const mom = form.family.value === 'momentum';
+  $('momBlock').style.display = mom ? '' : 'none';
+  $('oscBlock').style.display = mom ? 'none' : '';
+  $('momExitBlock').style.display = mom ? '' : 'none';
+  $('oscExitRule').style.display = mom ? 'none' : '';
+  $('exitWrap').style.display = (!mom && $('exitRule').value === 'osc') ? '' : 'none';
+  $('rankWrap').style.display = mom ? 'none' : '';
+  const entry = $('momEntry').value, isRs = entry === 'rs';
+  $('momHelp').textContent = MOM_HELP[entry];
+  $('lookbackLabel').textContent = isRs ? 'Performance over the last' : 'Highest high of the previous';
+  $('topWrap').style.display = isRs ? '' : 'none';
+  $('skipWrap').style.display = isRs ? '' : 'none';
+  $('rebWrap').style.display = isRs ? '' : 'none';
+  const rankOpt = $('momExit').querySelector('option[value=rank]');
+  rankOpt.disabled = !isRs; if (!isRs && $('momExit').value === 'rank') $('momExit').value = 'ma';
+  const x = $('momExit').value;
+  $('momExitRankWrap').style.display = x === 'rank' ? '' : 'none';
+  $('momExitLenWrap').style.display = (x === 'ma' || x === 'channel') ? '' : 'none';
+}
 
 let t;
 async function preview() {
@@ -438,7 +538,7 @@ async function runFile(file, extra) {
   try {
     const v = values();
     const r = await fetch('/api/run', {method: 'POST', body: JSON.stringify(Object.assign({file,
-      start: v.start, holdout_start: v.holdout_start, cost_bps: v.cost_bps}, extra || {}))});
+      start: v.start, holdout_start: v.holdout_start, cost_bps: v.cost_bps, trials: v.trials}, extra || {}))});
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     msg('Done – opening the report.', 'info');
@@ -460,19 +560,29 @@ $('run').addEventListener('click', async () => {
 function loadPlan(s) {
   const p = s.params, shift = p.entry_indicator === 'willr' ? 100 : 0;
   form.elements['name'].value = s.name; form.elements['note'].value = s.note || '';
-  sel.value = p.entry_indicator; applyIndicator(false);
-  form.entry_length.value = p.entry_length;
-  form.entry_level.value = +(p.entry_threshold - shift).toFixed(4);
-  form.exit_level.value = +(p.exit_threshold - shift).toFixed(4);
-  form.querySelector(`input[name=entry_mode][value=${p.entry_mode}]`).checked = true;
   const setSel = (name, v) => { const s = form[name]; if (![...s.options].some(o => +o.value === +v || o.value === String(v)))
     s.add(new Option(String(v), v)); s.value = String(v); };
+  const mom = p.entry_indicator === 'rs' || p.entry_indicator === 'breakout';
+  form.querySelector(`input[name=family][value=${mom ? 'momentum' : 'reversion'}]`).checked = true;
+  if (mom) {
+    $('momEntry').value = p.entry_indicator; setSel('mom_lookback', p.entry_length); setSel('mom_top', p.entry_threshold);
+    setSel('skip_days', p.skip_days); setSel('rebalance', p.rebalance);
+    $('momExit').value = ['rank', 'ma', 'channel', 'none'].includes(p.exit_rule) ? p.exit_rule : 'none';
+    setSel('mom_exit_rank', p.exit_threshold); setSel('mom_exit_length', p.exit_length || p.entry_length);
+  } else {
+    sel.value = p.entry_indicator; applyIndicator(false);
+    form.entry_length.value = p.entry_length;
+    form.entry_level.value = +(p.entry_threshold - shift).toFixed(4);
+    form.exit_level.value = +(p.exit_threshold - shift).toFixed(4);
+    form.querySelector(`input[name=entry_mode][value=${p.entry_mode}]`).checked = true;
+    form.exit_rule.value = ['osc', 'prev_high', 'none'].includes(p.exit_rule) ? p.exit_rule : 'osc';
+    form.rank_by.value = p.rank_by === 'volatility' ? 'volatility' : 'oversold';
+  }
   setSel('trend_ma', p.trend_ma); setSel('market_ma', p.market_ma); setSel('stop_adr_mult', p.stop_adr_mult);
   setSel('trail_adr_mult', p.trail_adr_mult); setSel('max_hold_days', p.max_hold_days);
   setSel('max_positions', p.max_positions); setSel('breadth_pct', Math.round(p.breadth_min * 100));
-  form.exit_rule.value = p.exit_rule; form.rank_by.value = p.rank_by;
   form.min_price.value = p.min_price; form.min_dollar_volume_m.value = p.min_dollar_volume / 1e6;
-  applyExit(); preview(); window.scrollTo({top: 0, behavior: 'smooth'});
+  applyExit(); applyFamily(); preview(); window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 async function loadState() {
@@ -498,9 +608,15 @@ async function loadState() {
 
 sel.addEventListener('change', () => { applyIndicator(true); preview(); });
 $('exitRule').addEventListener('change', () => { applyExit(); preview(); });
+form.querySelectorAll('input[name=family]').forEach(r => r.addEventListener('change', () => {
+  const mom = form.family.value === 'momentum';   // sensible defaults per family
+  form.max_hold_days.value = mom ? '0' : '10'; form.stop_adr_mult.value = mom ? '0' : '3';
+  applyFamily(); preview(); }));
+$('momEntry').addEventListener('change', () => { applyFamily(); preview(); });
+$('momExit').addEventListener('change', () => { applyFamily(); preview(); });
 form.addEventListener('input', preview);
 form.addEventListener('change', preview);
-applyIndicator(true); applyExit(); preview(); loadState();
+applyIndicator(true); applyExit(); applyFamily(); preview(); loadState();
 </script>
 </body>
 </html>

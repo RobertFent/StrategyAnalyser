@@ -14,6 +14,13 @@ All oscillators are returned on a 0..100 scale where LOW = OVERSOLD:
            (low = momentum weakest vs. its own recent history)
     cci    percent rank of CCI(20) over the last n days
 
+Trend / momentum features (not oscillators):
+    hh(n), ll(n)      highest high / lowest low of the PREVIOUS n days (today excluded)
+    momentum(n, skip) close[t-skip] / close[t-skip-n] - 1
+    mom_rank(n, skip) cross-sectional rank of momentum that day: 1 = strongest stock
+    rebalance_mask    True on the first trading day of each month / week
+    eligible          True while the ticker is a member of the index (point-in-time), if known
+
 Every value at row t only uses data up to and including the close of t
 (no look-ahead). Rows are sorted by Ticker, Date and each ticker's rows are
 contiguous - the engine relies on that.
@@ -66,7 +73,8 @@ OSCILLATORS = ('rsi', 'willr', 'stoch', 'ibs', 'mfi', 'bbp', 'crsi', 'uo', 'macd
 
 
 class FeatureStore:
-    def __init__(self, prices: pd.DataFrame, benchmark: pd.DataFrame | None = None):
+    def __init__(self, prices: pd.DataFrame, benchmark: pd.DataFrame | None = None,
+                 membership: pd.DataFrame | None = None):
         df = prices.sort_values(['Ticker', 'Date']).reset_index(drop=True)
         self.df = df
         self.tickers = df['Ticker'].to_numpy()
@@ -82,6 +90,9 @@ class FeatureStore:
         if benchmark is not None and not benchmark.empty:
             self.benchmark = benchmark.sort_values('Date').set_index('Date')['Close']
         self._cache: dict[tuple, np.ndarray] = {}
+        self.eligible: np.ndarray | None = None
+        if membership is not None and len(membership):
+            self.eligible = self._membership_mask(membership)
 
     def __len__(self) -> int:
         return len(self.close)
@@ -128,6 +139,8 @@ class FeatureStore:
         if key not in self._cache:
             osc = self.oscillator(name, n)
             valid = ~np.isnan(osc)
+            if self.eligible is not None:
+                valid &= self.eligible
             df = pd.DataFrame({'d': self.dates[valid], 'below': osc[valid] < threshold})
             share = df.groupby('d')['below'].mean()
             mapped = share.reindex(pd.DatetimeIndex(self.dates)).to_numpy()
@@ -243,6 +256,67 @@ class FeatureStore:
         with np.errstate(divide='ignore', invalid='ignore'):
             cci = (tp - mean) / (0.015 * mad)
         return self._grouped_pct_rank(cci, n)
+
+    # ---------- trend / momentum ----------
+    def _calc_hh(self, n: int) -> np.ndarray:
+        return self.shift(self._grouped_rolling(self.high, n, 'max'))
+
+    def _calc_ll(self, n: int) -> np.ndarray:
+        return self.shift(self._grouped_rolling(self.low, n, 'min'))
+
+    def momentum(self, n: int, skip: int = 0) -> np.ndarray:
+        key = ('momentum', int(n), int(skip))
+        if key not in self._cache:
+            end = self.shift(self.close, skip) if skip else self.close
+            start = self.shift(self.close, n + skip)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                self._cache[key] = end / start - 1.0
+        return self._cache[key]
+
+    def mom_rank(self, n: int, skip: int = 0) -> np.ndarray:
+        """1 = strongest momentum among all tickers with data that day; NaN where momentum is NaN."""
+        key = ('mom_rank', int(n), int(skip))
+        if key not in self._cache:
+            m = self.momentum(n, skip)
+            if self.eligible is not None:
+                m = np.where(self.eligible, m, np.nan)  # rank only among index members that day
+            s = pd.Series(m)
+            r = s.groupby(self.dates, sort=False).rank(ascending=False, method='first')
+            self._cache[key] = r.to_numpy(dtype=np.float64)
+        return self._cache[key]
+
+    def rebalance_mask(self, freq: str) -> np.ndarray:
+        """True on the first trading day of each month ('monthly') / week ('weekly'); all True for 'daily'."""
+        key = ('rebalance', freq)
+        if key not in self._cache:
+            if freq == 'daily':
+                self._cache[key] = np.ones(len(self.dates), dtype=bool)
+            else:
+                days = pd.DatetimeIndex(np.unique(self.dates))
+                period = days.to_period('M' if freq == 'monthly' else 'W')
+                first = pd.Series(days).groupby(period).first()
+                first_days = set(np.asarray(first.values, dtype='datetime64[ns]'))
+                self._cache[key] = np.isin(self.dates, list(first_days))
+        return self._cache[key]
+
+    def _membership_mask(self, membership: pd.DataFrame) -> np.ndarray:
+        """membership: columns Ticker, Start, End (End NaT = still a member)."""
+        mask = np.zeros(len(self.dates), dtype=bool)
+        starts = np.flatnonzero(self.first_row)
+        ends = np.r_[starts[1:], len(self.dates)]
+        rows = {t: (a, b) for t, a, b in zip(self.tickers[starts], starts, ends)}
+        for row in membership.itertuples(index=False):
+            span = rows.get(row.Ticker)
+            if span is None:
+                continue
+            a, b = span
+            d = self.dates[a:b]
+            lo = np.datetime64(pd.Timestamp(row.Start))
+            ok = d >= lo
+            if pd.notna(row.End):
+                ok &= d <= np.datetime64(pd.Timestamp(row.End))
+            mask[a:b] |= ok
+        return mask
 
     def _calc_adr(self, n: int) -> np.ndarray:
         return self._grouped_rolling(self.high - self.low, n, 'mean')

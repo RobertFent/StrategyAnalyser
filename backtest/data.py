@@ -88,6 +88,13 @@ def load_prices(index: str | None = None,
     return df.sort_values(['Ticker', 'Date']).reset_index(drop=True)
 
 
+def load_feature_store(index: str | None = 'sp500'):
+    """Prices + benchmark + point-in-time membership (if symbols/sp500_membership.csv exists)."""
+    from backtest.features import FeatureStore
+    from backtest.membership import load_membership
+    return FeatureStore(load_prices(index), load_benchmark('SPY'), load_membership(index))
+
+
 def load_benchmark(ticker: str = 'SPY') -> pd.DataFrame:
     df = load_table('benchmark')
     return df[df['Ticker'] == ticker].sort_values('Date').reset_index(drop=True)

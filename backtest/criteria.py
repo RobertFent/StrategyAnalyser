@@ -10,13 +10,15 @@ HOLDOUT_MIN_CAGR = 0.0              # holdout must make money
 HOLDOUT_MIN_SHARE_OF_SPY = 0.7      # ... and at least 70% of SPY's holdout CAGR
 SHARPE_MARGIN_OVER_SPY = 0.2        # full-period Sharpe >= SPY buy & hold Sharpe + 0.2
 STRESS_COST_BPS = 10                # at this cost per side Sharpe must still be >= SPY's
+LUCK_MIN_PROB = 0.90                # probability that the edge over SPY is real (deflated for tested variants)
 
 
 def evaluate(full: dict, holdout: dict, stressed: dict,
-             spy_full: dict, spy_holdout: dict, timing_holdout: dict) -> list[tuple[str, bool, str]]:
-    """Returns (criterion, passed, detail) rows."""
+             spy_full: dict, spy_holdout: dict, timing_holdout: dict,
+             luck: dict | None = None) -> list[tuple[str, bool, str]]:
+    """Returns (criterion, passed, detail) rows. `luck` = backtest.significance.luck_summary(...)."""
     pct = lambda x: f'{x * 100:.1f}%'
-    return [
+    rows = [
         ('Makes money in the test period', holdout['cagr'] > HOLDOUT_MIN_CAGR,
          f'{pct(holdout["cagr"])} per year'),
         (f'Test period: at least {HOLDOUT_MIN_SHARE_OF_SPY:.0%} of SPY\'s return',
@@ -33,6 +35,15 @@ def evaluate(full: dict, holdout: dict, stressed: dict,
         ('Smaller worst drop than SPY', full['max_drawdown'] > spy_full['max_drawdown'],
          f'{pct(full["max_drawdown"])} vs SPY {pct(spy_full["max_drawdown"])}'),
     ]
+    if luck is not None:
+        d, b = luck['dsr'], luck['bootstrap']
+        prob = min(d['prob'], b['p_positive'])
+        trials = d.get('trials', 1)
+        detail = (f'probability the edge over SPY is real: {prob * 100:.0f}% '
+                  f'(excess {b["excess_yearly"] * 100:+.1f}%/yr'
+                  + (f', after {trials} tested variants' if trials > 1 else '') + ')')
+        rows.append(('Unlikely to be luck', bool(prob >= LUCK_MIN_PROB), detail))
+    return rows
 
 
 def format_verdict(rows: list[tuple[str, bool, str]]) -> list[str]:

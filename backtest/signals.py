@@ -16,6 +16,7 @@ import pandas as pd
 
 from backtest.data import ROOT_DIR, load_benchmark, load_prices
 from backtest.features import FeatureStore
+from backtest.membership import load_membership
 from backtest.strategy import ADR_LENGTH, StrategyParams, build_signals
 
 
@@ -27,7 +28,8 @@ def main() -> None:
     args = ap.parse_args()
 
     p = StrategyParams.load(args.params)
-    fs = FeatureStore(load_prices(None if args.index == 'all' else args.index), load_benchmark('SPY'))
+    idx = None if args.index == 'all' else args.index
+    fs = FeatureStore(load_prices(idx), load_benchmark('SPY'), load_membership(idx))
     entry, exit_, rank = build_signals(fs, p)
     last_date = fs.dates.max()
     today = fs.dates == last_date

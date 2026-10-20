@@ -36,10 +36,12 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from backtest.benchmarks import benchmark_metrics, format_benchmarks
+from backtest.benchmarks import benchmark_metrics, format_benchmarks, spy_buy_hold
+from backtest.significance import format_luck, luck_summary
 from backtest.data import OUTPUT_DIR, load_benchmark, load_prices
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
+from backtest.membership import load_membership
 from backtest.metrics import compute_metrics, format_metrics, score
 from backtest.search_space import SPACES
 from backtest.strategy import StrategyParams
@@ -146,7 +148,7 @@ def _init(cfg: dict) -> None:
     global _FS, _CFG
     _CFG = cfg
     prices = load_prices(cfg['index'])
-    _FS = FeatureStore(prices, load_benchmark('SPY'))
+    _FS = FeatureStore(prices, load_benchmark('SPY'), load_membership(cfg['index']))
 
 
 def _evaluate(job: tuple[int, dict]) -> list[dict]:
@@ -281,7 +283,7 @@ def main() -> None:
              f'min_trades={args.min_trades}  max_dd={args.max_dd}  cost={args.cost_bps}bps/side  '
              f'space={args.space}', '']
 
-    fs = FeatureStore(prices, bench)
+    fs = FeatureStore(prices, bench, load_membership(index))
     if len(wf):
         oos = stitched_oos(fs, wf, base, sim, args.capital)
         empty = pd.DataFrame(columns=['net_return', 'pnl', 'bars_held'])
@@ -297,6 +299,8 @@ def main() -> None:
                   f'Sharpe {om["sharpe"]:.2f}  Calmar {om["calmar"]:.2f}',
                   'Benchmarks, same period:',
                   *format_benchmarks(benchmark_metrics(bench, oos.index, sim['cost_per_side'])),
+                  'Could the walk-forward result be luck? (vs SPY buy & hold; the yearly re-selection is one process, so trials = 1)',
+                  *format_luck(luck_summary(oos, spy_buy_hold(bench, oos.index), 1)),
                   '']
         pd.DataFrame({'oos_equity': oos}).to_csv(out / 'walk_forward_equity.csv')
 
@@ -315,13 +319,17 @@ def main() -> None:
                   'BEST PARAMETERS', best_params.describe(), '',
                   f'Tuning period ({windows[0][1].date()} .. {windows[0][2].date()})',
                   format_metrics(best.to_dict())]
-        payload = {'params': best_params.to_dict(), 'metric': args.metric, 'tuning_metrics':
+        payload = {'params': best_params.to_dict(), 'metric': args.metric, 'trials': len(combos), 'tuning_metrics':
                    {k: float(best[k]) for k in ['cagr', 'max_drawdown', 'sharpe', 'trades', 'win_rate']}}
         if args.holdout_start:
             res_h = simulate_portfolio(fs, generate_trades(fs, best_params), args.holdout_start, None,
                                        max_positions=best_params.max_positions, **sim)
             hm = compute_metrics(res_h.equity, res_h.trades, res_h.exposure)
             lines += ['', f'HOLDOUT ({args.holdout_start} .. end) - never seen during tuning', format_metrics(hm)]
+            res_f = simulate_portfolio(fs, generate_trades(fs, best_params), windows[0][1], None,
+                                       max_positions=best_params.max_positions, **sim)
+            lines += ['', f'COULD THE BEST SET BE LUCK? (tuning + holdout, vs SPY buy & hold, deflated for {len(combos)} tested sets)',
+                      *format_luck(luck_summary(res_f.equity, spy_buy_hold(bench, res_f.equity.index), len(combos)))]
             payload['holdout_metrics'] = {k: float(hm[k]) for k in ['cagr', 'max_drawdown', 'sharpe', 'trades', 'win_rate']}
         (out / 'best_params.json').write_text(json.dumps(payload, indent=2, default=str))
 

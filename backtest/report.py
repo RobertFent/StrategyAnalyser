@@ -19,9 +19,11 @@ import pandas as pd
 
 from backtest import criteria
 from backtest.benchmarks import benchmark_metrics, spy_buy_hold, spy_timing
+from backtest.significance import luck_summary
 from backtest.data import OUTPUT_DIR, ROOT_DIR, load_benchmark, load_prices
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
+from backtest.membership import load_membership
 from backtest.metrics import compute_metrics, yearly_returns
 from backtest.strategy import StrategyParams
 
@@ -45,14 +47,15 @@ def _period_table(title: str, strat: dict, bms: dict) -> str:
 
 
 def build(params_path: Path, index: str | None, start: str, holdout_start: str, cost_bps: float,
-          fs: FeatureStore | None = None) -> Path:
+          fs: FeatureStore | None = None, trials: int = 1) -> Path:
     """Backtest the rule set in params_path and write the HTML report. Pass a cached `fs` to skip loading data."""
     p = StrategyParams.load(params_path)
     meta = json.loads(params_path.read_text())
     note = meta.get('note', '')
+    trials = max(int(trials or 1), int(meta.get('trials', 1) or 1))  # a strategy file can record how it was found
     bench = load_benchmark('SPY')
     if fs is None:
-        fs = FeatureStore(load_prices(index), bench)
+        fs = FeatureStore(load_prices(index), bench, load_membership(index))
     cost = cost_bps / 1e4
     trades = generate_trades(fs, p)
     tune_end = pd.Timestamp(holdout_start) - pd.Timedelta(days=1)
@@ -69,8 +72,9 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
     full_b = benchmark_metrics(bench, full_res.equity.index, cost)
     tune_b = benchmark_metrics(bench, full_res.equity.index[full_res.equity.index <= tune_end], cost) if has_dev else None
     hold_b = benchmark_metrics(bench, full_res.equity.index[full_res.equity.index >= pd.Timestamp(holdout_start)], cost)
+    luck = luck_summary(full_res.equity, spy_buy_hold(bench, full_res.equity.index), trials)
     verdict = criteria.evaluate(full_m, hold_m, stress_m, full_b['SPY buy & hold'],
-                                hold_b['SPY buy & hold'], hold_b['SPY timing (>SMA200)'])
+                                hold_b['SPY buy & hold'], hold_b['SPY timing (>SMA200)'], luck)
     passed = sum(ok for _, ok, _ in verdict)
 
     # chart data: growth of $10,000 (weekly points), drawdowns, yearly returns
@@ -153,11 +157,12 @@ def main() -> None:
     ap.add_argument('--start', default='2016-01-01')
     ap.add_argument('--holdout-start', default='2025-01-01')
     ap.add_argument('--cost-bps', type=float, default=5.0)
+    ap.add_argument('--trials', type=int, default=1, help='rule sets tried before picking this one (deflates the luck check)')
     ap.add_argument('--no-open', action='store_true', help='do not open the report in the browser')
     args = ap.parse_args()
     print(f'Backtesting {args.params} ... (about a minute)')
     out = build(Path(args.params), None if args.index == 'all' else args.index,
-                args.start, args.holdout_start, args.cost_bps)
+                args.start, args.holdout_start, args.cost_bps, trials=args.trials)
     print(f'Report saved: {out.relative_to(ROOT_DIR)}')
     if not args.no_open:
         import webbrowser
@@ -324,7 +329,8 @@ footer { color: var(--text-3); font-size: 13px; margin-top: 18px; text-align: ce
     <dt>SPY timing</dt><dd>Simple benchmark: hold the S&amp;P 500 ETF only while it is above its 200-day average, otherwise cash. If a strategy can't beat this, its stock picking adds nothing.</dd>
     <dt>Development period</dt><dd>The years used to find the rules. Results here always look good.</dd>
     <dt>Test period</dt><dd>Data the rules have never seen. This is the honest number.</dd>
-    <dt>Verdict</dt><dd>Six checks agreed on before testing (strong enough vs SPY, holds up in the test period, survives {{STRESS}} bps costs, smaller drops than SPY). All six must pass before paper trading.</dd>
+    <dt>Verdict</dt><dd>Seven checks agreed on before testing (strong enough vs SPY, holds up in the test period, survives {{STRESS}} bps costs, smaller drops than SPY, unlikely to be luck). All must pass before paper trading.</dd>
+    <dt>Unlikely to be luck</dt><dd>Probability that the edge over SPY is real, from the day-to-day ups and downs of the difference between the strategy and SPY. Below 90% the result is within what chance alone produces. If many variants were tried before this one, the bar rises (a lucky best-of-100 looks impressive by itself).</dd>
   </dl>
 </section>
 

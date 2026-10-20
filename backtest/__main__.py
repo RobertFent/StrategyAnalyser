@@ -2,9 +2,10 @@
 
 COMMANDS = [
     ('Getting data', [
-        ('python3 -m backtest.fetch', 'download ~14 years of daily prices (first time, ~1 min)'),
+        ('python3 -m backtest.fetch --historical', 'download ~14 years of daily prices incl. past S&P 500 members (first time)'),
         ('python3 -m backtest.fetch --update', 'add the latest days (run before signals)'),
         ('python3 -m backtest.symbols', 'refresh the index member lists from Wikipedia'),
+        ('python3 -m backtest.membership [--check]', 'rebuild the S&P 500 membership history / check price coverage'),
     ]),
     ('Testing a plan (no coding)', [
         ('python3 -m backtest.app', 'planner in your browser: build a plan, save it, run the report'),
@@ -17,7 +18,7 @@ COMMANDS = [
     ('Research (for the curious)', [
         ('python3 -m backtest.run --params ...', 'detailed text backtest, trades.csv, equity.csv'),
         ('python3 -m backtest.analyze --params ... [--quick]', 'stress tests: verdict, costs, neighbors, random entries'),
-        ('python3 -m backtest.tune --space default', 'search many rule sets with walk-forward validation'),
+        ('python3 -m backtest.tune --space default|momentum', 'search many rule sets with walk-forward validation'),
     ]),
 ]
 

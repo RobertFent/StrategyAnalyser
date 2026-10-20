@@ -17,6 +17,7 @@ from backtest.benchmarks import benchmark_metrics, format_benchmarks, spy_timing
 from backtest.data import OUTPUT_DIR, load_benchmark, load_prices
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
+from backtest.membership import load_membership
 from backtest.metrics import compute_metrics, format_metrics, yearly_returns
 from backtest.strategy import StrategyParams
 
@@ -46,7 +47,7 @@ def main() -> None:
 
     prices = load_prices(None if args.index == 'all' else args.index)
     bench = load_benchmark('SPY')
-    fs = FeatureStore(prices, bench)
+    fs = FeatureStore(prices, bench, load_membership(None if args.index == 'all' else args.index))
 
     trades_all = generate_trades(fs, params)
     res = simulate_portfolio(fs, trades_all, args.start, args.end,

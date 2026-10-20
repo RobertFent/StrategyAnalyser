@@ -96,6 +96,71 @@ def test_planner_form_conversion():
         pass
 
 
+def test_momentum_features_and_membership():
+    p = synthetic_prices(5)
+    fs = FeatureStore(p)
+    one = p[p['Ticker'] == 'T02'].reset_index(drop=True)
+    rows = fs.tickers == 'T02'
+    # highest high of the PREVIOUS 20 days (today excluded)
+    ref = one['High'].rolling(20).max().shift(1).to_numpy()
+    assert np.allclose(fs.get('hh', 20)[rows], ref, equal_nan=True)
+    # momentum with skip: close[t-21] / close[t-21-126] - 1
+    refm = (one['Close'].shift(21) / one['Close'].shift(147) - 1).to_numpy()
+    assert np.allclose(fs.momentum(126, 21)[rows], refm, equal_nan=True)
+    # cross-sectional rank: 1..5 on every day where all 5 have data
+    rk = fs.mom_rank(126, 0)
+    d = pd.DataFrame({'d': fs.dates, 'r': rk}).dropna()
+    counts = d.groupby('d')['r'].agg(['min', 'max', 'count'])
+    full = counts[counts['count'] == 5]
+    assert (full['min'] == 1).all() and (full['max'] == 5).all()
+    # rebalance: exactly one True per month per ticker
+    rb = fs.rebalance_mask('monthly')
+    per_month = pd.Series(rb[rows]).groupby(pd.DatetimeIndex(fs.dates[rows]).to_period('M')).sum()
+    assert (per_month == 1).all()
+    # membership: T02 eligible only in 2017, T03 never (not listed), others always
+    mem = pd.DataFrame({'Ticker': ['T00', 'T01', 'T02', 'T04'],
+                        'Start': pd.to_datetime(['2010-01-01', '2010-01-01', '2017-01-01', '2010-01-01']),
+                        'End': pd.to_datetime([None, None, '2017-12-31', None])})
+    fs2 = FeatureStore(p, membership=mem)
+    yr = pd.DatetimeIndex(fs2.dates).year
+    assert fs2.eligible[(fs2.tickers == 'T02') & (yr == 2017)].all()
+    assert not fs2.eligible[(fs2.tickers == 'T02') & (yr != 2017)].any()
+    assert not fs2.eligible[fs2.tickers == 'T03'].any() and fs2.eligible[fs2.tickers == 'T00'].all()
+    # rank only among eligible: T03 must never have a rank
+    assert np.isnan(fs2.mom_rank(126, 0)[fs2.tickers == 'T03']).all()
+    # strategy only buys eligible stocks
+    t = generate_trades(fs2, StrategyParams(entry_indicator='rs', entry_length=63, entry_threshold=2,
+                                            exit_rule='rank', exit_threshold=3, rebalance='monthly', min_dollar_volume=0))
+    assert len(t) > 0 and 'T03' not in set(t['ticker'])
+    assert (t.loc[t['ticker'] == 'T02', 'signal_date'].dt.year == 2017).all()
+
+
+def test_breakout_rules_handmade():
+    rows = [(10, 10.5, 9.5, 10)] * 12 + [(10, 11, 9.9, 10.8)] + [(11, 11.5, 10.8, 11.2)] * 3 + [(11, 11.2, 9.0, 9.2), (9.2, 9.5, 9.0, 9.3)]
+    p = _frame(rows)
+    fs = FeatureStore(p)
+    fs._cache[('adr', 14)] = np.full(len(p), 1.0)
+    t = generate_trades(fs, StrategyParams(entry_indicator='breakout', entry_length=10, exit_rule='channel',
+                                           exit_length=5, min_price=0, min_dollar_volume=0))
+    assert len(t) == 1
+    assert t.loc[0, 'entry_date'] == p['Date'][13] and t.loc[0, 'entry_price'] == 11.0  # breakout close 10.8 > 10.5
+    assert t.loc[0, 'exit_reason'] == 'signal' and t.loc[0, 'exit_price'] == 9.2       # close 9.2 < 5-day low 9.9
+
+
+def test_significance_sanity():
+    from backtest.significance import bootstrap_excess, deflated_sharpe, excess_returns
+    rng = np.random.default_rng(3)
+    idx = pd.bdate_range('2016-01-01', periods=2000)
+    bench = pd.Series(np.cumprod(1 + rng.normal(0.0003, 0.01, 2000)), idx)
+    same = pd.Series(np.cumprod(1 + rng.normal(0.0003, 0.01, 2000)), idx)
+    better = pd.Series(np.cumprod(1 + rng.normal(0.0020, 0.01, 2000)), idx)
+    assert bootstrap_excess(excess_returns(same, bench), n=300)['p_positive'] < 0.9
+    ex = excess_returns(better, bench)
+    assert bootstrap_excess(ex, n=300)['p_positive'] > 0.95
+    assert deflated_sharpe(ex, 1)['prob'] > 0.95
+    assert deflated_sharpe(ex, 1)['prob'] > deflated_sharpe(ex, 500)['prob']  # more trials -> less confidence
+
+
 def test_willr_scale():
     p = synthetic_prices(1)
     fs = FeatureStore(p)

@@ -78,9 +78,55 @@ EXITS = [{
     'max_hold_days': [0, 5, 10, 20],
 }]
 
-SPACES = {'default': DEFAULT, 'indicators': INDICATORS, 'breadth': BREADTH, 'exits': EXITS}
+# 4) momentum / trend following: relative-strength ranking with periodic rebalancing, and breakouts
+MOMENTUM = [
+    {
+        'entry_indicator': ['rs'],
+        'entry_length': [63, 126, 252],          # momentum lookback (3, 6, 12 months)
+        'skip_days': [0, 21],                    # ignore the last month (12-1 momentum)
+        'entry_threshold': [10, 20, 30, 50],     # buy if among the top N stocks
+        'rebalance': ['weekly', 'monthly'],
+        'exit_rule': ['rank', 'ma', 'none'],
+        'exit_threshold': [30, 50, 100],         # rank exit: sell when worse than this rank
+        'exit_length': [50, 100, 200],           # ma exit: sell below this average
+        'trend_ma': [0, 200],
+        'market_ma': [0, 200],
+        'trail_adr_mult': [0, 4, 6],
+        'max_positions': [5, 10, 20],
+        'rank_by': ['momentum'],
+    },
+    {
+        'entry_indicator': ['breakout'],
+        'entry_length': [50, 100, 252],          # n-day high
+        'exit_rule': ['channel', 'ma', 'none'],
+        'exit_length': [20, 50, 100],            # channel low / moving average
+        'trend_ma': [0, 200],
+        'market_ma': [0, 200],
+        'trail_adr_mult': [0, 3, 4, 6],
+        'max_hold_days': [0, 60],
+        'max_positions': [10, 20],
+        'rank_by': ['momentum'],
+    },
+]
+
+SPACES = {'default': DEFAULT, 'indicators': INDICATORS, 'breadth': BREADTH, 'exits': EXITS, 'momentum': MOMENTUM}
 
 # values tried by `backtest.analyze` when changing one parameter at a time
+NEIGHBORHOOD_MOMENTUM = {
+    'entry_length': [42, 63, 126, 189, 252],
+    'skip_days': [0, 10, 21],
+    'entry_threshold': [5, 10, 20, 30, 50],
+    'rebalance': ['weekly', 'monthly'],
+    'exit_rule': ['rank', 'ma', 'channel', 'none'],
+    'exit_threshold': [20, 30, 50, 100],
+    'exit_length': [20, 50, 100, 200],
+    'trend_ma': [0, 100, 200],
+    'market_ma': [0, 200],
+    'trail_adr_mult': [0, 3, 4, 6],
+    'max_hold_days': [0, 60, 120],
+    'max_positions': [5, 10, 20],
+}
+
 NEIGHBORHOOD = {
     'entry_length': [2, 3, 4, 5, 7, 10, 14],
     'entry_threshold': [5, 10, 15, 20, 25],

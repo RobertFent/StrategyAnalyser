@@ -22,13 +22,15 @@ import numpy as np
 import pandas as pd
 
 from backtest import criteria
-from backtest.benchmarks import benchmark_metrics
+from backtest.benchmarks import benchmark_metrics, spy_buy_hold
+from backtest.significance import format_luck, luck_summary, random_entry_test
 from backtest.data import OUTPUT_DIR, load_benchmark, load_prices, load_universe
 from backtest.engine import generate_trades, simulate_portfolio
 from backtest.features import FeatureStore
+from backtest.membership import load_membership
 from backtest.metrics import compute_metrics
-from backtest.search_space import NEIGHBORHOOD
-from backtest.strategy import StrategyParams
+from backtest.search_space import NEIGHBORHOOD, NEIGHBORHOOD_MOMENTUM
+from backtest.strategy import StrategyParams, filter_mask
 
 COLS = ['cagr', 'max_drawdown', 'sharpe', 'calmar', 'trades', 'win_rate', 'avg_trade', 'profit_factor']
 
@@ -56,10 +58,15 @@ class Ctx:
 
 def neighborhood(ctx: Ctx, p: StrategyParams) -> pd.DataFrame:
     rows = []
-    for key, candidates in NEIGHBORHOOD.items():
+    space = NEIGHBORHOOD_MOMENTUM if p.is_momentum else NEIGHBORHOOD
+    for key, candidates in space.items():
         if key == 'entry_length' and p.entry_indicator in ('ibs', 'uo'):
             continue
-        if key == 'exit_threshold' and p.exit_rule != 'osc':
+        if key == 'exit_threshold' and p.exit_rule not in ('osc', 'rank'):
+            continue
+        if key == 'exit_length' and p.exit_rule not in ('ma', 'channel'):
+            continue
+        if key in ('skip_days', 'entry_threshold', 'rebalance') and p.entry_indicator == 'breakout':
             continue
         values = sorted(set(candidates) | {getattr(p, key)}, key=lambda v: (str(type(v)), v))
         for v in values:
@@ -69,27 +76,26 @@ def neighborhood(ctx: Ctx, p: StrategyParams) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index(['param', 'value'])
 
 
-def random_entry_edge(fs: FeatureStore, trades: pd.DataFrame, start, end, seed=0) -> pd.DataFrame:
-    """For every signal trade pick a random entry day in the same ticker & year, hold the same
-    number of bars (open -> open). Shows whether the signal beats just being long that stock."""
+def random_entry_edge(fs: FeatureStore, trades: pd.DataFrame, p: StrategyParams, start, end, seed=0) -> pd.DataFrame:
+    """For every signal trade pick a random entry day in the same ticker & year that passes the same
+    filters, hold the same number of bars (open -> open). Shows what the indicator's timing adds."""
     rng = np.random.default_rng(seed)
     t = trades[(trades['entry_date'] >= pd.Timestamp(start)) & (trades['entry_date'] <= pd.Timestamp(end))]
     t = t[t['exit_reason'] != 'open']
     years = pd.DatetimeIndex(fs.dates).year.to_numpy()
     tick = fs.tickers
-    # row ranges per (ticker, year)
-    key = pd.Series(np.arange(len(tick))).groupby([tick, years])
-    ranges = {k: (v.min(), v.max()) for k, v in key}
+    allowed = filter_mask(fs, p)  # random days must pass the same trend / market / liquidity filters
+    idx_all = np.arange(len(tick))[allowed]
+    pools = {k: v.to_numpy() for k, v in pd.Series(idx_all).groupby([tick[idx_all], years[idx_all]])}
     rand = []
     for row in t.itertuples(index=False):
-        lo, hi = ranges[(row.ticker, row.entry_date.year)]
-        hold = max(int(row.bars_held), 1)
-        hi = min(hi, len(tick) - 1 - hold)
-        if hi <= lo:
+        pool = pools.get((row.ticker, row.entry_date.year))
+        if pool is None or len(pool) == 0:
             continue
-        i = int(rng.integers(lo, hi + 1))
+        hold = max(int(row.bars_held), 1)
+        i = int(pool[rng.integers(0, len(pool))]) + 1
         j = i + hold
-        if tick[j] != row.ticker:
+        if j >= len(tick) or tick[j] != row.ticker:
             continue
         rand.append(fs.open[j] / fs.open[i] - 1)
     sig = t['gross_return']
@@ -111,6 +117,9 @@ def main() -> None:
     ap.add_argument('--holdout-start', default='2025-01-01')
     ap.add_argument('--cost-bps', type=float, default=5.0)
     ap.add_argument('--random-runs', type=int, default=20)
+    ap.add_argument('--trials', type=int, default=1,
+                    help='how many rule sets were tried before picking this one (1 = fixed hypothesis). '
+                         'Used to deflate the luck check.')
     ap.add_argument('--quick', action='store_true',
                     help='only baseline, verdict, costs and regimes (skips the slow sections 2, 4, 7)')
     args = ap.parse_args()
@@ -120,7 +129,7 @@ def main() -> None:
         p = StrategyParams.from_dict({**p.to_dict(), **dict(s.split('=', 1) for s in args.set)})
 
     bench = load_benchmark('SPY')
-    fs = FeatureStore(load_prices(args.index), bench)
+    fs = FeatureStore(load_prices(args.index), bench, load_membership(args.index))
     tune_end = (pd.Timestamp(args.holdout_start) - pd.Timedelta(days=1)) if args.holdout_start else None
     sim = {'cost_per_side': args.cost_bps / 1e4}
     ctx = Ctx(fs, args.start, tune_end, sim)
@@ -156,10 +165,19 @@ def main() -> None:
                                       cost_per_side=criteria.STRESS_COST_BPS / 1e4)
     stressed = compute_metrics(stressed_res.equity, stressed_res.trades, stressed_res.exposure)
     (full_m, full_b), (hold_m, hold_b) = metrics['full'], metrics['holdout']
+    luck = luck_summary(full_res.equity, spy_buy_hold(bench, full_res.equity.index), args.trials)
     verdict = criteria.evaluate(full_m, hold_m, stressed, full_b['SPY buy & hold'],
-                                hold_b['SPY buy & hold'], hold_b['SPY timing (>SMA200)'])
+                                hold_b['SPY buy & hold'], hold_b['SPY timing (>SMA200)'], luck)
     lines += ['VERDICT (criteria in backtest/criteria.py; holdout = never used for tuning)',
-              *criteria.format_verdict(verdict), '']
+              *criteria.format_verdict(verdict), '',
+              'COULD THIS BE LUCK? (full period from --start, vs SPY buy & hold)',
+              *format_luck(luck), '']
+    if not args.quick:
+        rt = random_entry_test(fs, trades, p, args.start, None, n=args.random_runs, cost_per_side=sim['cost_per_side'])
+        lines += [f'  Random-entry test ({rt["runs"]} portfolios with the same trades but random entry days '
+                  f'under the same filters): strategy Sharpe {rt["actual"]:.2f} vs random median '
+                  f'{rt["random_median"]:.2f} (95th pct {rt["random_p95"]:.2f})  -> p = {rt["p_value"]:.2f}'
+                  + ('  the entry timing adds something' if rt['p_value'] < 0.05 else '  timing could be luck'), '']
 
     # 2 neighborhood
     if not args.quick:
@@ -186,8 +204,8 @@ def main() -> None:
         lines += [f'4. SLOT CHOICE (tuning period, {args.random_runs} random runs)', fmt_table(sel), '']
 
     # 5 random entries
-    edge = random_entry_edge(fs, trades, args.start, tune_end or fs.dates.max())
-    lines += ['5. SIGNAL vs RANDOM ENTRY (gross per trade, same ticker/year/holding time)', fmt_table(edge), '']
+    edge = random_entry_edge(fs, trades, p, args.start, tune_end or fs.dates.max())
+    lines += ['5. SIGNAL vs RANDOM ENTRY (gross per trade, same ticker/year/holding time, same filters)', fmt_table(edge), '']
 
     # 6 regimes
     t = full_res.trades.copy()
@@ -212,7 +230,7 @@ def main() -> None:
     uni_rows = {}
     universes = [] if args.quick else load_universe()['Index'].unique()
     for idx in [u for u in universes if u != args.index]:
-        fs2 = FeatureStore(load_prices(idx), bench)
+        fs2 = FeatureStore(load_prices(idx), bench, load_membership(idx))
         ctx2 = Ctx(fs2, args.start, None, sim)
         uni_rows[idx] = ctx2.run(p)
     if uni_rows:

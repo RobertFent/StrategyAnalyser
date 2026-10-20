@@ -19,7 +19,7 @@ commands into the Terminal and read the result in your browser.
    python3 -m venv .venv
    source .venv/bin/activate          # Windows: .venv\Scripts\activate
    pip install -r requirements.txt
-   python3 -m backtest.fetch          # downloads ~14 years of prices, about 1 minute
+   python3 -m backtest.fetch --historical   # ~14 years of prices incl. past index members, 1-2 minutes
    ```
 
 Next time you open a Terminal in the folder, you only need the `source .venv/bin/activate` line
@@ -57,8 +57,11 @@ python3 -m backtest.app
 This opens the **Strategy Planner** in your browser. It runs only on your own computer.
 
 1. **Name** the plan.
-2. **When to buy:** pick the indicator, e.g. RSI, Williams %R, Stochastic, Connors RSI or CCI. Set its length and
-   the oversold level, e.g. RSI(4) below 20, and choose whether to buy only on the first day or on any day it's there.
+2. **When to buy:** choose the strategy type first.
+   - *Buy the dip:* pick the indicator, e.g. RSI, Williams %R, Stochastic, Connors RSI or CCI. Set its length and
+     the oversold level, e.g. RSI(4) below 20, and whether to buy only on the first day or on any day it's there.
+   - *Follow the trend:* buy the strongest stocks (top N by performance over 3–12 months, checked weekly or monthly)
+     or breakouts to a new N-day high.
 3. **Filters:** the stock above its 200-day average, the S&P 500 (SPY) above its 200-day average.
 4. **When to sell:** the indicator recovers, close above yesterday's high, stop loss, trailing stop, or a maximum number of days.
 5. **Positions:** how many at the same time.
@@ -91,7 +94,8 @@ When you're done, close the Terminal window or press `Ctrl+C`.
 | SPY timing | hold the S&P 500 only while it's above its 200-day average | the strategy should beat this, otherwise the stock picking adds nothing |
 | Development period | the years used to find the rules | always looks good, so don't trust it alone |
 | **Test period** | data the rules have never seen | **this is the honest number** |
-| **Verdict** | 6 checks agreed on before testing | **all 6 must pass before paper trading** |
+| **Verdict** | 7 checks agreed on before testing | **all 7 must pass before paper trading** |
+| Unlikely to be luck | probability that the edge over SPY is more than chance; the more variants you tried, the higher the bar | at least 90% |
 
 ---
 
@@ -114,8 +118,9 @@ When you're done, close the Terminal window or press `Ctrl+C`.
 
 ## 6. Good to know
 
-- **Survivorship bias:** the stock lists are today's index members, so companies that dropped out of the
-  index are missing. Real results tend to be somewhat lower than the backtest.
+- **Survivorship bias:** the backtest knows which stocks were in the S&P 500 on each day and only buys those.
+  Prices of companies that were delisted after leaving the index are mostly unavailable, so results are still
+  slightly optimistic. `python3 -m backtest.fetch --historical` prints how much history is covered.
 - **Costs:** the tests assume 0.05% per buy or sell. The verdict also checks double costs.
 - **Long only:** the tool only buys stocks, it never shorts. Daily bars only: buy at the next open after a
   signal at the close.
