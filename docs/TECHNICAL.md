@@ -15,6 +15,7 @@ backtest/
   metrics.py, benchmarks.py CAGR, drawdown, Sharpe, Calmar; SPY buy & hold, SPY timing
   criteria.py               the 7 pass/fail checks used by the verdict
   app.py, plan.py, report.py  planner web app (stdlib http.server, 127.0.0.1 only), terminal questionnaire, HTML report
+  compare.py                multi-strategy comparison page
   run.py, analyze.py, tune.py, signals.py
   search_space.py           what tune searches
 strategies/                 rule sets as JSON
@@ -29,9 +30,9 @@ All commands run from the repo root. Each command prints a report and writes it 
 | 1. Data | `python3 -m backtest.fetch` / `--update` | ~14 years of adjusted daily OHLCV + SPY/QQQ into `data/` |
 | 2. Tune | `python3 -m backtest.tune --space default --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar` | random/grid search with walk-forward validation (train 3y, test 1y), then one run on the untouched holdout |
 | 3. Analyze | `python3 -m backtest.analyze --params output/tuning_<ts>/best_params.json` (`--quick` = verdict only) | **pass/fail verdict**, comparison with SPY and SPY timing, one parameter changed at a time, cost sensitivity, ranked vs random slot choice, signal vs random entry, regimes, other indices |
-| 4. Backtest | `python3 -m backtest.run --params strategies/current.json --start 2016-01-01` | full report, trades.csv and equity.csv vs SPY and SPY timing |
-| 5. Adopt | copy a `best_params.json` to `strategies/current.json` | only if the analyze verdict passes |
-| 6. Paper trade | daily `python3 -m backtest.fetch --update && python3 -m backtest.signals --holding AAPL ...`, monthly `python3 -m backtest.run --params strategies/current.json --start <first paper day>` | entry candidates and exit signals; monthly check of what the rules did since you started |
+| 4. Backtest | `python3 -m backtest.run --params strategies/willr.json --start 2016-01-01` | full report, trades.csv and equity.csv vs SPY and SPY timing |
+| 5. Adopt | copy a `best_params.json` to `strategies/willr.json` | only if the analyze verdict passes |
+| 6. Paper trade | daily `python3 -m backtest.fetch --update && python3 -m backtest.signals --holding AAPL ...`, monthly `python3 -m backtest.run --params strategies/willr.json --start <first paper day>` | entry candidates and exit signals; monthly check of what the rules did since you started |
 | Own plan | edit `strategies/coach_plan.json`, then `python3 -m backtest.analyze --params strategies/coach_plan.json` | test a trading plan as a fixed hypothesis |
 | Tests | `python3 tests/test_backtest.py` | engine sanity checks |
 
@@ -56,6 +57,14 @@ All commands run from the repo root. Each command prints a report and writes it 
   Exits: `rank` (dropped below rank `exit_threshold`), `ma`, `channel`, trailing stop, time.
 - **Membership:** `FeatureStore.eligible` marks rows where the ticker was in the index; entries, breadth and
   momentum ranks use only eligible rows. Positions are held through a removal until the exit rule fires.
+
+## Rule-book mechanics (RSI(4) classic)
+`universe` ('sp100+nasdaq100' etc., today's members for anything but sp500), `max_price`, `min_history_days`,
+`max_new_per_day` (portfolio level), `rank_by='symbol_roi'` (free slots go to symbols whose earlier completed
+trades had the best average return; no look-ahead), `obe_min_gap` (entry only if the open is that far below the
+signal close), `add_drop_pct` (second equal block at entry × (1 − pct), filled at the open on a gap, skipped within
+`add_skip_near_stop` of the stop; the portfolio funds it from cash if available).
+The exit rule of the rule book is not in the excerpt we have; `strategies/rsi4_*.json` use a placeholder.
 
 ## Significance
 `backtest.significance`: `bootstrap_excess` (stationary block bootstrap, 20-day blocks, of daily strategy − SPY),

@@ -36,6 +36,14 @@ python3 -m backtest.report
 Opens a one-page report in your browser for the reference rule set. Read the **Verdict** first: 7 checks, all
 must pass. Then the test-period numbers and the growth chart against SPY.
 
+### Step 2b – compare strategies with each other and with SPY (1–2 minutes)
+```sh
+python3 -m backtest.compare
+```
+One page with every saved rule set: growth of $10,000 against SPY buy & hold and SPY timing, whole-period and
+test-period numbers, verdict checks passed, year by year, and how similar the strategies are. Pick files with
+`--params strategies/a.json strategies/b.json`. The planner has a *Compare all plans* button for the same thing.
+
 ### Step 3 – build and test your own plan (a few minutes per plan)
 ```sh
 python3 -m backtest.app
@@ -47,7 +55,10 @@ Opens the Strategy Planner in your browser (it runs only on your computer). Pick
   optional "ignore the last month") or breakouts to a new N-day high; exits by rank, moving average, channel
   low or trailing stop.
 
-Under *More options*, fill in **"Variants tried before this one"** honestly; it raises the bar for the luck check.
+Under *More options*: universe (S&P 500, S&P 100, Nasdaq-100 or both), price cap, max. new positions per day,
+minimum price history, OBE entries (only buy if the open is 2% or 4% below the signal close), a second block
+when the price falls 5% below entry, and **"Variants tried before this one"** (fill it in honestly; it raises
+the bar for the luck check).
 Write the rules down before you look at any result, then click **Save & run backtest**. The report opens after
 about a minute. Saved plans can be reopened with *Edit* and re-run with *Report*.
 
@@ -96,8 +107,8 @@ The 200-day trend filter does most of the work; the indicators add little.
 |---|---|---|---|
 | SPY buy & hold | 15.1% | −33.7% | – |
 | SPY timing (hold SPY only above its 200-day average) | 11.4% | −20.7% | – |
-| Reference dip-buying rules (`strategies/current.json`) | 7.6% | −27.4% | 2 of 7, luck check 5% |
-| Momentum, best of 400 (`strategies/candidate_momentum.json`) | 7.6% out-of-sample 2019–24 | −29.2% | luck check 0% |
+| Reference dip-buying rules (`strategies/willr.json`) | 7.6% | −27.4% | 2 of 7, luck check 5% |
+| Momentum, best of 400 (`strategies/best_strategy.json`) | 7.6% out-of-sample 2019–24 | −29.2% | luck check 0% |
 
 Full results, verdicts and reasoning: **[docs/strategy-research.md](docs/strategy-research.md)**.
 Searching, stress tests and engine details: [docs/TECHNICAL.md](docs/TECHNICAL.md).
@@ -105,7 +116,7 @@ Searching, stress tests and engine details: [docs/TECHNICAL.md](docs/TECHNICAL.m
 ## What's in here
 | Folder | Contents |
 |---|---|
-| `strategies/` | saved rule sets: `current.json` (reference), `candidate_breadth.json`, `candidate_momentum.json`, `coach_plan.json` (template), plus your own |
+| `strategies/` | saved rule sets: `willr.json` (dip-buying reference), `best_strategy.json` (best of the momentum search), `rsi4_*.json` (RSI(4) rule book: classic, OBE, 5% adds), `candidate_breadth.json`, `coach_plan.json` (template), plus your own |
 | `symbols/` | index lists and `sp500_membership.csv` (who was in the S&P 500 when) |
 | `docs/` | guide, findings, technical notes |
 | `backtest/` | the code (`python3 -m backtest.<command>`) |

@@ -1,6 +1,6 @@
 """Backtest ONE strategy and write a full report.
 
-    python3 -m backtest.run --params strategies/current.json
+    python3 -m backtest.run --params strategies/willr.json
     python3 -m backtest.run --params output/tuning_<ts>/best_params.json --start 2016-01-01
     python3 -m backtest.run --set entry_indicator=rsi entry_length=2 entry_threshold=10 max_positions=5
 
@@ -45,13 +45,15 @@ def main() -> None:
     if args.set:
         params = StrategyParams.from_dict({**params.to_dict(), **parse_overrides(args.set)})
 
+    if params.universe:
+        args.index = params.universe
     prices = load_prices(None if args.index == 'all' else args.index)
     bench = load_benchmark('SPY')
     fs = FeatureStore(prices, bench, load_membership(None if args.index == 'all' else args.index))
 
     trades_all = generate_trades(fs, params)
     res = simulate_portfolio(fs, trades_all, args.start, args.end,
-                             max_positions=params.max_positions,
+                             max_positions=params.max_positions, max_new_per_day=params.max_new_per_day,
                              cost_per_side=args.cost_bps / 10_000,
                              initial_capital=args.capital)
     m = compute_metrics(res.equity, res.trades, res.exposure)

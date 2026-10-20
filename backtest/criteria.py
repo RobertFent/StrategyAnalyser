@@ -2,7 +2,7 @@
 
 Used by `python3 -m backtest.analyze` (section VERDICT). Edit the thresholds here,
 not after seeing a result. Meant for a rule set chosen in advance (e.g. your trading
-plan or strategies/current.json); for a freshly tuned set the tuning period is in-sample,
+plan or strategies/willr.json); for a freshly tuned set the tuning period is in-sample,
 so judge it by the walk-forward result of `backtest.tune` first.
 """
 

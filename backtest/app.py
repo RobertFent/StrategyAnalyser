@@ -92,6 +92,10 @@ def params_from_form(f: dict) -> StrategyParams:
             max_positions=max(1, int(num('max_positions', 10))),
             min_price=num('min_price', 5),
             min_dollar_volume=num('min_dollar_volume_m', 5) * 1e6,
+            universe=f.get('universe', '') if f.get('universe') in ('', 'sp100', 'nasdaq100', 'sp100+nasdaq100') else '',
+            max_price=num('max_price'), max_new_per_day=int(num('max_new_per_day')),
+            min_history_days=int(num('min_history_years') * 252),
+            obe_min_gap=num('obe_pct') / 100.0, add_drop_pct=num('add_pct') / 100.0,
         )
         if p.entry_length < 5 or p.entry_threshold < 1 or p.max_positions > 50:
             raise ValueError('Please check the numbers (lookback at least 5 days, top N at least 1, at most 50 positions).')
@@ -117,6 +121,10 @@ def params_from_form(f: dict) -> StrategyParams:
         max_positions=max(1, int(num('max_positions', 10))),
         min_price=num('min_price', 5),
         min_dollar_volume=num('min_dollar_volume_m', 5) * 1e6,
+        universe=f.get('universe', '') if f.get('universe') in ('', 'sp100', 'nasdaq100', 'sp100+nasdaq100') else '',
+        max_price=num('max_price'), max_new_per_day=int(num('max_new_per_day')),
+        min_history_days=int(num('min_history_years') * 252),
+        obe_min_gap=num('obe_pct') / 100.0, add_drop_pct=num('add_pct') / 100.0,
     )
     if p.entry_length < 0 or p.max_positions > 50 or p.max_hold_days < 0:
         raise ValueError('Please check the numbers (no negative values, at most 50 positions).')
@@ -139,12 +147,13 @@ def list_strategies() -> list[dict]:
 
 
 def list_reports(limit: int = 12) -> list[dict]:
-    files = sorted(OUTPUT_DIR.glob('report_*.html'), key=lambda f: f.stat().st_mtime, reverse=True)[:limit]
+    files = sorted(list(OUTPUT_DIR.glob('report_*.html')) + list(OUTPUT_DIR.glob('compare_*.html')),
+                   key=lambda f: f.stat().st_mtime, reverse=True)[:limit]
     out = []
     for f in files:
-        m = re.fullmatch(r'report_(.+)_(\d{8})_(\d{6})', f.stem)
-        label = (f'{m.group(1).replace("_", " ")} · {datetime.strptime(m.group(2) + m.group(3), "%Y%m%d%H%M%S"):%d %b %Y %H:%M}'
-                 if m else f.stem)
+        m = re.fullmatch(r'(?:report_(.+)|(compare))_(\d{8})_(\d{6})', f.stem)
+        label = (f'{(m.group(1) or "comparison of all").replace("_", " ")} · '
+                 f'{datetime.strptime(m.group(3) + m.group(4), "%Y%m%d%H%M%S"):%d %b %Y %H:%M}' if m else f.stem)
         out.append({'file': f.name, 'label': label})
     return out
 
@@ -182,7 +191,7 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith('/reports/'):
             name = Path(unquote(path[len('/reports/'):])).name
             f = OUTPUT_DIR / name
-            if re.fullmatch(r'report_[\w.-]+\.html', name) and f.is_file():
+            if re.fullmatch(r'(report|compare)_[\w.-]+\.html', name) and f.is_file():
                 return self._send(200, f.read_bytes(), 'text/html; charset=utf-8')
         self._send(404, b'Not found', 'text/plain')
 
@@ -199,14 +208,26 @@ class Handler(BaseHTTPRequestHandler):
                 file.write_text(json.dumps({'name': name, 'note': (body.get('note') or '').strip()[:500],
                                             'params': p.to_dict()}, indent=2) + '\n')
                 return self._json({'file': file.name})
+            if path == '/api/compare':
+                from backtest.compare import build as build_compare
+                files = [STRATEGY_DIR / Path(f).name for f in body.get('files', [])]
+                files = [f for f in files if f.is_file()]
+                if not files:
+                    files = sorted(p for p in STRATEGY_DIR.glob('*.json') if p.stem != 'coach_plan')
+                for f in files:  # warm the caches for every universe used
+                    feature_store(StrategyParams.load(f).universe or 'sp500')
+                out = build_compare(files, 'sp500', body.get('start') or '2016-01-01',
+                                    body.get('holdout_start') or '2025-01-01', float(body.get('cost_bps') or 5))
+                return self._json({'url': f'/reports/{out.name}'})
             if path == '/api/run':
                 file = STRATEGY_DIR / Path(body.get('file', '')).name
                 if not file.is_file():
                     return self._json({'error': 'Strategy file not found.'}, 404)
                 from backtest.report import build  # imported lazily: keeps start-up fast
-                out = build(file, 'sp500', body.get('start') or '2016-01-01',
+                uni = StrategyParams.load(file).universe or 'sp500'
+                out = build(file, uni, body.get('start') or '2016-01-01',
                             body.get('holdout_start') or '2025-01-01', float(body.get('cost_bps') or 5),
-                            fs=feature_store('sp500'), trials=max(1, int(body.get('trials') or 1)))
+                            fs=feature_store(uni), trials=max(1, int(body.get('trials') or 1)))
                 return self._json({'url': f'/reports/{out.name}'})
         except FileNotFoundError as e:
             return self._json({'error': f'{e}'}, 400)
@@ -440,6 +461,19 @@ a { color: var(--accent); }
         <option value="2">0.02%</option><option value="5" selected>0.05%</option><option value="10">0.10%</option><option value="20">0.20%</option></select></label>
       <label class="f">Minimum stock price ($)<input type="number" name="min_price" value="5" min="0" step="any"></label>
       <label class="f">Min. daily trading value ($ millions)<input type="number" name="min_dollar_volume_m" value="5" min="0" step="any"></label>
+      <label class="f">Universe<select name="universe">
+        <option value="" selected>S&P 500 (point-in-time members)</option><option value="sp100">S&P 100</option>
+        <option value="nasdaq100">Nasdaq-100</option><option value="sp100+nasdaq100">S&P 100 + Nasdaq-100</option></select></label>
+      <label class="f">Maximum stock price ($)<input type="number" name="max_price" value="0" min="0" step="any"><small>0 = no limit</small></label>
+      <label class="f">Max. new positions per day<input type="number" name="max_new_per_day" value="0" min="0" step="1"><small>0 = no limit</small></label>
+      <label class="f">Min. price history (years)<select name="min_history_years">
+        <option value="0" selected>none</option><option value="1">1 year</option><option value="3">3 years</option><option value="5">5 years</option></select></label>
+      <label class="f">OBE entries only<select name="obe_pct">
+        <option value="0" selected>off</option><option value="2">open at least 2% below the signal close</option>
+        <option value="4">open at least 4% below the signal close</option></select></label>
+      <label class="f">Add a second block<select name="add_pct">
+        <option value="0" selected>off</option><option value="5">if the price falls 5% below entry</option>
+        <option value="10">if the price falls 10% below entry</option></select></label>
       <label class="f">Variants tried before this one<input type="number" name="trials" value="1" min="1" step="1"><small>be honest: each variant you tried raises the bar for "not luck"</small></label>
       <label class="f">Backtest from<input type="text" name="start" value="2016-01-01"><small>YYYY-MM-DD</small></label>
       <label class="f">Test period from<input type="text" name="holdout_start" value="2025-01-01"><small>never used to pick rules</small></label>
@@ -460,6 +494,7 @@ a { color: var(--accent); }
   <div class="card">
     <h2>Saved plans</h2>
     <ul class="list" id="plans"></ul>
+    <button class="btn ghost" id="compare" type="button" style="margin-top:10px">Compare all plans with SPY</button>
   </div>
   <div class="card">
     <h2>Recent reports</h2>
@@ -548,6 +583,16 @@ async function runFile(file, extra) {
   finally { $('run').disabled = false; }
 }
 
+$('compare').addEventListener('click', async () => {
+  $('compare').disabled = true;
+  msg('Comparing all saved plans … about a minute per plan the first time.', 'info', true);
+  try {
+    const v = values();
+    const r = await fetch('/api/compare', {method: 'POST', body: JSON.stringify({start: v.start, holdout_start: v.holdout_start, cost_bps: v.cost_bps})});
+    const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    loadState(); window.location.href = j.url;
+  } catch (e) { msg(e.message, 'err'); } finally { $('compare').disabled = false; }
+});
 $('run').addEventListener('click', async () => {
   try {
     const r = await fetch('/api/save', {method: 'POST', body: JSON.stringify(values())});
@@ -582,6 +627,9 @@ function loadPlan(s) {
   setSel('trail_adr_mult', p.trail_adr_mult); setSel('max_hold_days', p.max_hold_days);
   setSel('max_positions', p.max_positions); setSel('breadth_pct', Math.round(p.breadth_min * 100));
   form.min_price.value = p.min_price; form.min_dollar_volume_m.value = p.min_dollar_volume / 1e6;
+  form.universe.value = p.universe || ''; form.max_price.value = p.max_price || 0; form.max_new_per_day.value = p.max_new_per_day || 0;
+  setSel('min_history_years', Math.round((p.min_history_days || 0) / 252)); setSel('obe_pct', Math.round((p.obe_min_gap || 0) * 100));
+  setSel('add_pct', Math.round((p.add_drop_pct || 0) * 100));
   applyExit(); applyFamily(); preview(); window.scrollTo({top: 0, behavior: 'smooth'});
 }
 

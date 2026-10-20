@@ -1,6 +1,6 @@
 """One-page HTML report for a rule set - made for reading, not for coding.
 
-    python3 -m backtest.report                                    # strategies/current.json
+    python3 -m backtest.report                                    # strategies/willr.json
     python3 -m backtest.report --params strategies/coach_plan.json
 
 Writes output/report_<name>_<timestamp>.html and opens it in the browser (--no-open to skip).
@@ -30,6 +30,15 @@ from backtest.strategy import StrategyParams
 SERIES = ['Strategy', 'SPY buy & hold', 'SPY timing']
 
 
+def universe_label(index: str | None) -> str:
+    names = {'sp500': 'S&P 500', 'sp100': 'S&P 100', 'nasdaq100': 'Nasdaq-100', None: 'all', 'all': 'all'}
+    parts = [names.get(i, i) for i in (index or 'all').split('+')]
+    label = ' + '.join(parts) + ' stocks'
+    if index != 'sp500':
+        label += " (today's members)"
+    return label
+
+
 def _pct(x: float, digits: int = 1) -> str:
     return f'{x * 100:.{digits}f}%'
 
@@ -50,6 +59,7 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
           fs: FeatureStore | None = None, trials: int = 1) -> Path:
     """Backtest the rule set in params_path and write the HTML report. Pass a cached `fs` to skip loading data."""
     p = StrategyParams.load(params_path)
+    index = p.universe or index
     meta = json.loads(params_path.read_text())
     note = meta.get('note', '')
     trials = max(int(trials or 1), int(meta.get('trials', 1) or 1))  # a strategy file can record how it was found
@@ -61,7 +71,7 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
     tune_end = pd.Timestamp(holdout_start) - pd.Timedelta(days=1)
 
     def sim(s, e, c=cost):
-        r = simulate_portfolio(fs, trades, s, e, max_positions=p.max_positions, cost_per_side=c)
+        r = simulate_portfolio(fs, trades, s, e, max_positions=p.max_positions, max_new_per_day=p.max_new_per_day, cost_per_side=c)
         return r, compute_metrics(r.equity, r.trades, r.exposure)
 
     full_res, full_m = sim(start, None)
@@ -119,6 +129,7 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
     for key, val in {
         '{{TITLE}}': html.escape(title),
         '{{PERIOD}}': period,
+        '{{UNIVERSE}}': universe_label(index),
         '{{NOTE}}': f'<p class="note">{html.escape(note)}</p>' if note else '',
         '{{RULES}}': rules,
         '{{VERDICT_CLASS}}': 'ok' if headline_ok else 'bad',
@@ -152,8 +163,8 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--params', default=str(ROOT_DIR / 'strategies' / 'current.json'))
-    ap.add_argument('--index', default='sp500')
+    ap.add_argument('--params', default=str(ROOT_DIR / 'strategies' / 'willr.json'))
+    ap.add_argument('--index', default='sp500', help="sp500 | sp100 | nasdaq100 | sp100+nasdaq100 | all; a 'universe' in the strategy file wins")
     ap.add_argument('--start', default='2016-01-01')
     ap.add_argument('--holdout-start', default='2025-01-01')
     ap.add_argument('--cost-bps', type=float, default=5.0)
@@ -256,7 +267,7 @@ footer { color: var(--text-3); font-size: 13px; margin-top: 18px; text-align: ce
 <header>
   <a id="back" href="/" style="display:none;color:var(--s1);font-size:14px;text-decoration:none">&larr; Back to the planner</a>
   <h1>{{TITLE}}</h1>
-  <p class="sub">Backtest on S&amp;P 500 stocks · {{PERIOD}} · costs {{COST}} bps per trade side</p>
+  <p class="sub">Backtest on {{UNIVERSE}} · {{PERIOD}} · costs {{COST}} bps per trade side</p>
 </header>
 {{NOTE}}
 

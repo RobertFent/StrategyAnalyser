@@ -11,6 +11,7 @@ COMMANDS = [
         ('python3 -m backtest.app', 'planner in your browser: build a plan, save it, run the report'),
         ('python3 -m backtest.plan', 'same in the Terminal: answer questions -> strategies/<name>.json'),
         ('python3 -m backtest.report --params strategies/<name>.json', 'one-page HTML report with verdict and charts'),
+        ('python3 -m backtest.compare [--params a.json b.json]', 'all strategies on one page against SPY (default: every file in strategies/)'),
     ]),
     ('Daily use', [
         ('python3 -m backtest.signals --params strategies/<name>.json', "today's buy candidates (add --holding AAPL MSFT for sell signals)"),

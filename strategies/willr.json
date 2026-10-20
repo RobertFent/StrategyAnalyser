@@ -1,6 +1,6 @@
 {
-  "name": "Reference: Williams %R dip-buying",
-  "note": "Best rule set from the search with the trend and market filter always on (picked on 2016-2024). Realistic expectation: about 10-14% per year with smaller drops than SPY.",
+  "name": "Williams %R dip-buying (reference)",
+  "note": "Reference rule set from the 2016-2024 search with trend+market filter. Point-in-time members: 7.6%/yr vs SPY 15%, verdict 2 of 7. Kept as the dip-buying reference.",
   "params": {
     "entry_indicator": "willr",
     "entry_length": 10,

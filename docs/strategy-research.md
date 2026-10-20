@@ -36,7 +36,7 @@ Several thousand rule sets in total. Each is listed with the command that reprod
 | **SPY buy & hold** | 17.1% / −33.7% / 0.90 | 17.4% / −18.8% |
 | **SPY timing (>200-day avg)** | 12.2% / −20.7% / 0.97 | 11.2% / −10.2% |
 | Free search | 10.9% / −17.1% / 0.78 | −2.1% / – |
-| Filters forced → `strategies/current.json` | 12.4% / −21.5% / 0.92 | 7.3% / −12.8% |
+| Filters forced → `strategies/willr.json` | 12.4% / −21.5% / 0.92 | 7.3% / −12.8% |
 | Broad pullbacks → `strategies/candidate_breadth.json` | 6.2% / −39.3% / 0.42 | 18.3% / −16.8% * |
 | Exits | 19.8% / −12.9% / 1.22 ** | −5.4% / −26.3% |
 | More indicators (best: CCI) | 6.6% / −26.3% / 0.52 | −3.5% / −23.7% |
@@ -50,7 +50,7 @@ set drops to 7.6% / yr over 2016–2026 with point-in-time members.
 
 **Verdict against the pass/fail criteria** (`backtest/criteria.py`, set before the final check):
 
-| Criterion | current.json | candidate_breadth | best CCI |
+| Criterion | willr.json | candidate_breadth | best CCI |
 |---|---|---|---|
 | Makes money in the test period | PASS | PASS | FAIL |
 | Test period: at least 70% of SPY's return | FAIL (7.3% vs 17.4%) | PASS | FAIL |
@@ -115,6 +115,32 @@ picture is: days that pass the trend filter (stock and SPY above their 200-day a
 So the indicator does add about +0.2% per trade *given* the filter, and the filter gives it back. Net ≈ SPY,
 and after survivorship bias, below SPY.
 
+### 5. Comparison page and the RSI(4) rule book (20 Oct, evening)
+`python3 -m backtest.compare` puts several rule sets and SPY on one page. First run on the current data
+(2016 – Oct 2026, 5 bps per side; RSI(4) variants on S&P 100 + Nasdaq-100 with today's members):
+
+| | Return / yr | Worst drop | Sharpe | Test period return / yr | Verdict | Not luck |
+|---|---|---|---|---|---|---|
+| SPY buy & hold | 15.1% | −33.7% | 0.88 | 17.6% | – | – |
+| SPY timing | 11.4% | −20.7% | 0.97 | 11.4% | – | – |
+| Williams %R dip-buying (`willr.json`) | 7.6% | −27.4% | 0.60 | 8.0% | 2 / 7 | 5% |
+| Momentum, best of 400 (`best_strategy.json`) | 18.5% | −28.6% | 0.81 | 26.4% | 3 / 7 | 1% |
+| RSI(4) classic rule book (`rsi4_classic.json`) | 4.1% | −18.1% | 0.40 | 5.2% | 2 / 7 | 0% |
+| RSI(4) + OBE 2% entries | 2.1% | −12.7% | 0.41 | 1.3% | 2 / 7 | 0% |
+| RSI(4) + 5% adds | 5.7% | −26.2% | 0.47 | 10.4% | 2 / 7 | 1% |
+| RSI(4) + OBE + 5% adds | 2.5% | −24.9% | 0.31 | 2.3% | 2 / 7 | 0% |
+
+Notes:
+- The RSI(4) rule book (S&P 100 / Nasdaq-100, $5–$250, above the 200-day average, RSI(4) below 15, max 3 new
+  trades a day, 10 positions, prioritised by each symbol's past ROI) is implemented as written, **but the exit
+  rule and the "dynamic stop-loss" were not in the excerpt**. The files use a placeholder exit (RSI(4) back above
+  55, no stop). Replace it with the real rules before reading anything into these numbers.
+- OBE entries (only buy if the open is 2%+ below the signal close) cut the trades from ~1,400 to ~145 and the
+  return with them; 5% adds raise the return a little and the drawdown a lot (averaging down into losers).
+- The momentum set's 18.5% / yr includes its own tuning period; its honest number is the 7.6% / yr walk-forward above.
+- The daily returns of the dip-buying and momentum rules correlate only ~0.5, so mixing them would smooth the ride,
+  but none of them earns more than SPY.
+
 ## What we learned
 1. **The 200-day trend filter does most of the work.** Without it, returns halve and drawdowns double. Holding only SPY above its 200-day average gets a similar Sharpe (0.97) with no stock picking at all.
 2. **An oversold reading has no edge on its own.** Trades entered on an oversold signal average +0.49%. Random entries in the same stock, year and holding time average +0.47%. The signal raises the win rate (69% vs 55%) but the losses get bigger, so the average stays the same.
@@ -133,7 +159,7 @@ and after survivorship bias, below SPY.
 1. **Test the coach's trading plan as a fixed hypothesis.** Run `python3 -m backtest.plan`, answer the questions
    before looking at any result, then run `python3 -m backtest.report --params strategies/<plan>.json` once.
    The verdict decides. Don't tweak afterwards. To compare variants, decide all of them up front and report every one.
-2. **Paper trade for 3–6 months** whatever passes, and `current.json` for comparison. How to do it is in [GUIDE.md](GUIDE.md), section 5.
+2. **Paper trade for 3–6 months** whatever passes, and `willr.json` for comparison. How to do it is in [GUIDE.md](GUIDE.md), section 5.
 3. **If smaller drops are the goal**, compare honestly with SPY timing. It is simpler, cheaper and shows similar risk-adjusted results.
 4. **Open ideas** (only as fixed hypotheses, not new searches):
    - a cap on positions per sector
@@ -149,7 +175,7 @@ python3 -m backtest.tune --space breadth    --start 2016-01-01 --holdout-start 2
 python3 -m backtest.tune --space exits      --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 600
 python3 -m backtest.tune --space indicators --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 800
 python3 -m backtest.tune --space momentum   --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20
-python3 -m backtest.analyze --params strategies/current.json            # add --quick for verdict only
-python3 -m backtest.report  --params strategies/current.json            # one-page HTML report
+python3 -m backtest.analyze --params strategies/willr.json            # add --quick for verdict only
+python3 -m backtest.report  --params strategies/willr.json            # one-page HTML report
 ```
 Random search uses `--seed 42`. Numbers can move slightly when the data is re-downloaded, because adjusted prices and index members change.

@@ -44,7 +44,11 @@ This opens a one-page report in your browser for the reference rule set. It cove
 
 Other saved rule sets are in the `strategies` folder, for example:
 ```sh
-python3 -m backtest.report --params strategies/candidate_breadth.json
+python3 -m backtest.report --params strategies/best_strategy.json
+```
+To see all of them on one page against SPY:
+```sh
+python3 -m backtest.compare
 ```
 
 ---

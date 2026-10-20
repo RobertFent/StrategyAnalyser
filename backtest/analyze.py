@@ -51,7 +51,7 @@ class Ctx:
 
     def run(self, p: StrategyParams, trades=None, **sim_over) -> dict:
         trades = generate_trades(self.fs, p) if trades is None else trades
-        kw = {'max_positions': p.max_positions, **self.sim, **sim_over}
+        kw = {'max_positions': p.max_positions, 'max_new_per_day': p.max_new_per_day, **self.sim, **sim_over}
         res = simulate_portfolio(self.fs, trades, self.start, self.end, **kw)
         return compute_metrics(res.equity, res.trades, res.exposure)
 
@@ -128,6 +128,8 @@ def main() -> None:
     if args.set:
         p = StrategyParams.from_dict({**p.to_dict(), **dict(s.split('=', 1) for s in args.set)})
 
+    if p.universe:
+        args.index = p.universe
     bench = load_benchmark('SPY')
     fs = FeatureStore(load_prices(args.index), bench, load_membership(args.index))
     tune_end = (pd.Timestamp(args.holdout_start) - pd.Timedelta(days=1)) if args.holdout_start else None
@@ -144,7 +146,7 @@ def main() -> None:
     metrics = {}
     for name, (s, e) in {'tuning period': (args.start, tune_end), 'holdout': (args.holdout_start, None),
                          'full': (args.start, None)}.items():
-        res = simulate_portfolio(fs, trades, s, e, max_positions=p.max_positions, **sim)
+        res = simulate_portfolio(fs, trades, s, e, max_positions=p.max_positions, max_new_per_day=p.max_new_per_day, **sim)
         m = compute_metrics(res.equity, res.trades, res.exposure)
         b = bench.set_index('Date')['Close'].reindex(res.equity.index).ffill()
         bm = compute_metrics(b / b.iloc[0], pd.DataFrame(columns=['net_return', 'pnl', 'bars_held']))
@@ -161,7 +163,7 @@ def main() -> None:
               fmt_table(base), '']
 
     # verdict against criteria.py (decided before looking at results)
-    stressed_res = simulate_portfolio(fs, trades, args.start, None, max_positions=p.max_positions,
+    stressed_res = simulate_portfolio(fs, trades, args.start, None, max_positions=p.max_positions, max_new_per_day=p.max_new_per_day,
                                       cost_per_side=criteria.STRESS_COST_BPS / 1e4)
     stressed = compute_metrics(stressed_res.equity, stressed_res.trades, stressed_res.exposure)
     (full_m, full_b), (hold_m, hold_b) = metrics['full'], metrics['holdout']
@@ -229,7 +231,7 @@ def main() -> None:
     # 7 other universes
     uni_rows = {}
     universes = [] if args.quick else load_universe()['Index'].unique()
-    for idx in [u for u in universes if u != args.index]:
+    for idx in [u for u in universes if u not in args.index.split('+')]:
         fs2 = FeatureStore(load_prices(idx), bench, load_membership(idx))
         ctx2 = Ctx(fs2, args.start, None, sim)
         uni_rows[idx] = ctx2.run(p)

@@ -85,8 +85,9 @@ def build(path: Path = MEMBERSHIP_FILE) -> pd.DataFrame:
 
 def load_membership(index: str | None = 'sp500', path: Path = MEMBERSHIP_FILE) -> pd.DataFrame | None:
     """Intervals for the index, or None when no membership file exists (then today's list is used)."""
-    if index != 'sp500' or not path.exists():
-        return None
+    parts = (index or '').split('+')
+    if not any(i in ('sp500', 'sp100') for i in parts) or not path.exists():
+        return None  # tickers without a record are treated as always eligible (see FeatureStore)
     df = pd.read_csv(path)
     df['Start'] = pd.to_datetime(df['Start'])
     df['End'] = pd.to_datetime(df['End'])

@@ -158,7 +158,7 @@ def _evaluate(job: tuple[int, dict]) -> list[dict]:
     try:
         trades = generate_trades(_FS, params)
         for name, ws, we in _CFG['windows']:
-            res = simulate_portfolio(_FS, trades, ws, we, max_positions=params.max_positions, **_CFG['sim'])
+            res = simulate_portfolio(_FS, trades, ws, we, max_positions=params.max_positions, max_new_per_day=params.max_new_per_day, **_CFG['sim'])
             m = compute_metrics(res.equity, res.trades, res.exposure)
             rows.append({'combo_id': combo_id, 'window': name, **params.to_dict(), **m})
     except Exception as e:  # keep tuning even if one combo explodes
@@ -174,7 +174,7 @@ def stitched_oos(fs: FeatureStore, wf: pd.DataFrame, base: dict, sim: dict, capi
     for _, row in wf.iterrows():
         p = StrategyParams.from_dict({**base, **{k: row[k] for k in PARAM_NAMES if k in row}})
         res = simulate_portfolio(fs, generate_trades(fs, p), row['test_start'], row['test_end'],
-                                 max_positions=p.max_positions, **sim)
+                                 max_positions=p.max_positions, max_new_per_day=p.max_new_per_day, **sim)
         parts.append(res.equity.pct_change().fillna(0.0))
     rets = pd.concat(parts)
     return capital * (1 + rets).cumprod()
@@ -323,11 +323,11 @@ def main() -> None:
                    {k: float(best[k]) for k in ['cagr', 'max_drawdown', 'sharpe', 'trades', 'win_rate']}}
         if args.holdout_start:
             res_h = simulate_portfolio(fs, generate_trades(fs, best_params), args.holdout_start, None,
-                                       max_positions=best_params.max_positions, **sim)
+                                       max_positions=best_params.max_positions, max_new_per_day=best_params.max_new_per_day, **sim)
             hm = compute_metrics(res_h.equity, res_h.trades, res_h.exposure)
             lines += ['', f'HOLDOUT ({args.holdout_start} .. end) - never seen during tuning', format_metrics(hm)]
             res_f = simulate_portfolio(fs, generate_trades(fs, best_params), windows[0][1], None,
-                                       max_positions=best_params.max_positions, **sim)
+                                       max_positions=best_params.max_positions, max_new_per_day=best_params.max_new_per_day, **sim)
             lines += ['', f'COULD THE BEST SET BE LUCK? (tuning + holdout, vs SPY buy & hold, deflated for {len(combos)} tested sets)',
                       *format_luck(luck_summary(res_f.equity, spy_buy_hold(bench, res_f.equity.index), len(combos)))]
             payload['holdout_metrics'] = {k: float(hm[k]) for k in ['cagr', 'max_drawdown', 'sharpe', 'trades', 'win_rate']}

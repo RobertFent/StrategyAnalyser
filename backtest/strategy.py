@@ -71,6 +71,13 @@ class StrategyParams:
     max_positions: int = 10             # equal-weight slots, each gets equity / max_positions
     rebalance: str = 'daily'            # daily | weekly | monthly: when 'rs' entries and 'rank' exits are checked
     skip_days: int = 0                  # momentum: ignore the most recent n days (e.g. 21 for 12-1 momentum)
+    universe: str = ''                  # '' = whatever --index says; e.g. 'sp100+nasdaq100'
+    max_price: float = 0.0              # 0 = off; e.g. 250 -> only stocks priced <= $250
+    min_history_days: int = 0           # 0 = off; e.g. 756 -> the stock needs 3 years of price history
+    max_new_per_day: int = 0            # 0 = off; e.g. 3 -> at most 3 new positions per day
+    obe_min_gap: float = 0.0            # 0 = off; e.g. 0.02 -> only enter if the open is >= 2% below the signal close
+    add_drop_pct: float = 0.0           # 0 = off; e.g. 0.05 -> buy a second equal block if price falls 5% below entry
+    add_skip_near_stop: float = 0.005   # skip the add if its price is within 0.5% of the stop
 
     MOMENTUM_ENTRIES = ('rs', 'breakout')
 
@@ -156,8 +163,14 @@ class StrategyParams:
             buy.append(f'the stock is above its {self.trend_ma}-day average')
         if self.market_ma:
             buy.append(f'SPY is above its {self.market_ma}-day average')
-        buy.append(f'price at least ${self.min_price:g}, average daily trading value at least '
-                   f'${self.min_dollar_volume / 1e6:g}M')
+        price = f'price at least ${self.min_price:g}' + (f' and at most ${self.max_price:g}' if self.max_price else '')
+        if self.min_dollar_volume:
+            price += f', average daily trading value at least ${self.min_dollar_volume / 1e6:g}M'
+        buy.append(price)
+        if self.min_history_days:
+            buy.append(f'at least {self.min_history_days / 252:g} years of price history')
+        if self.universe:
+            buy.append(f'listed in {self.universe.replace("+", " or ").replace("sp", "S&P ").replace("nasdaq", "Nasdaq ")}')
         sell = []
         if self.exit_rule == 'osc':
             sell.append(f'{label(xind, self.exit_len)} rises above {lvl(xind, self.exit_threshold)} '
@@ -178,14 +191,21 @@ class StrategyParams:
             sell.append(f'after {self.max_hold_days} trading days -> sell at the {nxt}')
         rank_by = 'momentum' if (self.is_momentum and self.rank_by == 'oversold') else self.rank_by
         pick = {'oversold': 'the most oversold', 'volatility': 'the most volatile',
-                'momentum': 'the strongest performers'}[rank_by]
+                'momentum': 'the strongest performers',
+                'symbol_roi': 'the symbols with the best past results (average return of their earlier trades)'}[rank_by]
         lines = ['BUY when all of these are true at the close:']
         lines += [f'  - {b}' for b in buy]
-        lines.append(f'  -> buy at the {nxt}')
+        lines.append(f'  -> buy at the {nxt}'
+                     + (f', but only if the open is at least {self.obe_min_gap * 100:g}% below the signal close (OBE)'
+                        if self.obe_min_gap else ''))
+        if self.add_drop_pct:
+            lines.append(f'  - if the price falls {self.add_drop_pct * 100:g}% below the entry, buy a second block of the same '
+                         f'size (skipped within {self.add_skip_near_stop * 100:g}% of the stop)')
         lines.append('SELL at the first of:')
         lines += [f'  - {x}' for x in (sell or ['never (no exit rule set)'])]
-        lines.append(f'POSITIONS: up to {self.max_positions} at once, {100 / self.max_positions:g}% of the account each; '
-                     f'if there are more signals than free spots, take {pick}')
+        lines.append(f'POSITIONS: up to {self.max_positions} at once, {100 / self.max_positions:g}% of the account each'
+                     + (f', at most {self.max_new_per_day} new per day' if self.max_new_per_day else '')
+                     + f'; if there are more signals than free spots, take {pick}')
         return '\n'.join(lines)
 
 
@@ -200,6 +220,10 @@ def filter_mask(fs: FeatureStore, p: StrategyParams) -> np.ndarray:
         ok &= fs.close >= p.min_price
     if p.min_dollar_volume:
         ok &= fs.get('dollar_volume', DOLLAR_VOLUME_LENGTH) >= p.min_dollar_volume
+    if p.max_price:
+        ok &= fs.close <= p.max_price
+    if p.min_history_days:
+        ok &= fs.bars_since_start() >= p.min_history_days
     if fs.eligible is not None:
         ok &= fs.eligible  # point-in-time index membership (no survivorship bias)
     return ok
@@ -256,6 +280,8 @@ def build_signals(fs: FeatureStore, p: StrategyParams) -> tuple[np.ndarray, np.n
         rank = -np.nan_to_num(fs.momentum(n, p.skip_days), nan=-1e9)
     elif p.rank_by == 'oversold':
         rank = osc
+    elif p.rank_by == 'symbol_roi':
+        rank = osc if osc is not None else np.zeros(len(fs))  # replaced per trade in generate_trades
     else:
         raise ValueError(f'unknown rank_by {p.rank_by!r}')
     return entry, exit_, rank

@@ -74,12 +74,13 @@ def load_prices(index: str | None = None,
                 end: str | None = None) -> pd.DataFrame:
     """Load adjusted OHLCV. `index` filters to tickers of e.g. 'sp500' (None = all)."""
     df = load_table('prices')
-    if index:
+    if index and index != 'all':
         universe = load_universe()
-        tickers = set(universe.loc[universe['Index'] == index, 'Ticker'])
+        wanted = [i.strip() for i in index.split('+') if i.strip()]
+        tickers = set(universe.loc[universe['Index'].isin(wanted), 'Ticker'])
         if not tickers:
             raise ValueError(f'No tickers for index {index!r}. '
-                             f'Available: {sorted(universe["Index"].unique())}')
+                             f'Available: {sorted(universe["Index"].unique())} (combine with +)')
         df = df[df['Ticker'].isin(tickers)]
     if start:
         df = df[df['Date'] >= pd.Timestamp(start)]

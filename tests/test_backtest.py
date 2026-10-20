@@ -118,14 +118,16 @@ def test_momentum_features_and_membership():
     per_month = pd.Series(rb[rows]).groupby(pd.DatetimeIndex(fs.dates[rows]).to_period('M')).sum()
     assert (per_month == 1).all()
     # membership: T02 eligible only in 2017, T03 never (not listed), others always
-    mem = pd.DataFrame({'Ticker': ['T00', 'T01', 'T02', 'T04'],
-                        'Start': pd.to_datetime(['2010-01-01', '2010-01-01', '2017-01-01', '2010-01-01']),
-                        'End': pd.to_datetime([None, None, '2017-12-31', None])})
+    # T03 left the index before our data starts (never eligible); a ticker with no record at all is always eligible
+    mem = pd.DataFrame({'Ticker': ['T00', 'T01', 'T02', 'T03'],
+                        'Start': pd.to_datetime(['2010-01-01', '2010-01-01', '2017-01-01', '2000-01-01']),
+                        'End': pd.to_datetime([None, None, '2017-12-31', '2009-12-31'])})
     fs2 = FeatureStore(p, membership=mem)
     yr = pd.DatetimeIndex(fs2.dates).year
     assert fs2.eligible[(fs2.tickers == 'T02') & (yr == 2017)].all()
     assert not fs2.eligible[(fs2.tickers == 'T02') & (yr != 2017)].any()
     assert not fs2.eligible[fs2.tickers == 'T03'].any() and fs2.eligible[fs2.tickers == 'T00'].all()
+    assert fs2.eligible[fs2.tickers == 'T04'].all()  # no record -> treated as eligible
     # rank only among eligible: T03 must never have a rank
     assert np.isnan(fs2.mom_rank(126, 0)[fs2.tickers == 'T03']).all()
     # strategy only buys eligible stocks
@@ -145,6 +147,42 @@ def test_breakout_rules_handmade():
     assert len(t) == 1
     assert t.loc[0, 'entry_date'] == p['Date'][13] and t.loc[0, 'entry_price'] == 11.0  # breakout close 10.8 > 10.5
     assert t.loc[0, 'exit_reason'] == 'signal' and t.loc[0, 'exit_price'] == 9.2       # close 9.2 < 5-day low 9.9
+
+
+def test_rulebook_mechanics():
+    # OBE: entry only if open <= signal close * (1 - gap); add: second block 5% below entry
+    rows = [
+        (10.0, 10.5, 9.5, 10.4),   # 0
+        (10.0, 10.5, 9.5, 9.6),    # 1 ibs 10 -> signal, close 9.6
+        (9.5, 9.8, 9.0, 9.1),      # 2 open 9.5 = 1% below -> OBE 2% rejects; without OBE: entry 9.5
+        (9.1, 9.3, 8.9, 9.0),      # 3 low 8.9 <= 9.5*0.95=9.025 -> add at 9.025 (ibs 25, no exit)
+        (9.2, 10.0, 9.1, 9.9),     # 4 ibs 89 -> exit signal
+        (10.0, 10.2, 9.8, 10.1),   # 5 exit at open 10.0
+        (10.0, 10.2, 9.8, 10.1),
+    ]
+    p = _frame(rows)
+    fs = FeatureStore(p)
+    fs._cache[('adr', 14)] = np.full(len(p), 1.0)
+    base = dict(entry_indicator='ibs', entry_length=0, entry_threshold=20, exit_threshold=50, min_price=0, min_dollar_volume=0)
+    assert len(generate_trades(fs, StrategyParams(**base, obe_min_gap=0.02))) == 0
+    t = generate_trades(fs, StrategyParams(**base, add_drop_pct=0.05))
+    assert len(t) == 1 and t.loc[0, 'entry_price'] == 9.5 and t.loc[0, 'add_idx'] == 3
+    assert abs(t.loc[0, 'add_price'] - 9.025) < 1e-6 and t.loc[0, 'exit_price'] == 10.0
+    res = simulate_portfolio(fs, t, max_positions=2, cost_per_side=0.0, initial_capital=1000)
+    tr = res.trades.iloc[0]
+    assert abs(tr['cost'] - (500 + 500 / 9.5 * 9.025)) < 1e-6          # second block, same share count
+    assert abs(tr['proceeds'] - 2 * (500 / 9.5) * 10.0) < 1e-6
+    # daily limit: 3 candidates on one day, max 2 new per day
+    p2 = synthetic_prices(6)
+    fs2 = FeatureStore(p2)
+    q = StrategyParams(entry_indicator='ibs', entry_length=0, entry_threshold=40, exit_threshold=60,
+                       min_price=0, min_dollar_volume=0, max_positions=10, max_new_per_day=2)
+    r2 = simulate_portfolio(fs2, generate_trades(fs2, q), max_positions=10, max_new_per_day=2)
+    assert r2.trades.groupby('entry_date').size().max() <= 2
+    # symbol_roi ranking: no look-ahead -> first 3 trades of each symbol rank 0
+    t3 = generate_trades(fs2, q.with_(rank_by='symbol_roi'))
+    first = t3.sort_values('entry_date').groupby('ticker').head(3)
+    assert (first['rank'] == 0).all() and (t3['rank'] != 0).any()
 
 
 def test_significance_sanity():

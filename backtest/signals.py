@@ -1,6 +1,6 @@
 """Today's signals for a rule set (run after `python3 -m backtest.fetch --update`).
 
-    python3 -m backtest.signals                                  # strategies/current.json
+    python3 -m backtest.signals                                  # strategies/willr.json
     python3 -m backtest.signals --params strategies/candidate_breadth.json --holding AAPL MSFT
 
 Prints new entry candidates for the next open (ranked like the backtest fills its slots)
@@ -22,13 +22,13 @@ from backtest.strategy import ADR_LENGTH, StrategyParams, build_signals
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--params', default=str(ROOT_DIR / 'strategies' / 'current.json'))
+    ap.add_argument('--params', default=str(ROOT_DIR / 'strategies' / 'willr.json'))
     ap.add_argument('--index', default='sp500')
     ap.add_argument('--holding', nargs='*', default=[], help='tickers you currently hold')
     args = ap.parse_args()
 
     p = StrategyParams.load(args.params)
-    idx = None if args.index == 'all' else args.index
+    idx = p.universe or (None if args.index == 'all' else args.index)
     fs = FeatureStore(load_prices(idx), load_benchmark('SPY'), load_membership(idx))
     entry, exit_, rank = build_signals(fs, p)
     last_date = fs.dates.max()

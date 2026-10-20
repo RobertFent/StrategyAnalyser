@@ -285,6 +285,15 @@ class FeatureStore:
             self._cache[key] = r.to_numpy(dtype=np.float64)
         return self._cache[key]
 
+    def bars_since_start(self) -> np.ndarray:
+        """0 on a ticker's first row, 1 on the next, ... (how much history the stock has)."""
+        key = ('bars_since_start',)
+        if key not in self._cache:
+            idx = np.arange(len(self.dates))
+            starts = np.maximum.accumulate(np.where(self.first_row, idx, 0))
+            self._cache[key] = idx - starts
+        return self._cache[key]
+
     def rebalance_mask(self, freq: str) -> np.ndarray:
         """True on the first trading day of each month ('monthly') / week ('weekly'); all True for 'daily'."""
         key = ('rebalance', freq)
@@ -305,6 +314,10 @@ class FeatureStore:
         starts = np.flatnonzero(self.first_row)
         ends = np.r_[starts[1:], len(self.dates)]
         rows = {t: (a, b) for t, a, b in zip(self.tickers[starts], starts, ends)}
+        known = set(membership['Ticker'])
+        for t, (a, b) in rows.items():  # tickers without any membership record (other index): always eligible
+            if t not in known:
+                mask[a:b] = True
         for row in membership.itertuples(index=False):
             span = rows.get(row.Ticker)
             if span is None:

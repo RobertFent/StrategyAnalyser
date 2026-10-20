@@ -116,7 +116,7 @@ def random_entry_test(fs, trades: pd.DataFrame, params, start, end, n: int = 30,
     from backtest.strategy import filter_mask
 
     rng = np.random.default_rng(seed)
-    res = simulate_portfolio(fs, trades, start, end, max_positions=params.max_positions, cost_per_side=cost_per_side)
+    res = simulate_portfolio(fs, trades, start, end, max_positions=params.max_positions, max_new_per_day=params.max_new_per_day, cost_per_side=cost_per_side)
     actual = compute_metrics(res.equity, res.trades, res.exposure)[metric]
 
     t = trades[(trades['exit_reason'] != 'open')].reset_index(drop=True)
@@ -150,10 +150,11 @@ def random_entry_test(fs, trades: pd.DataFrame, params, start, end, n: int = 30,
             'entry_price': fs.open[e_idx], 'exit_price': fs.open[x_idx],
             'exit_reason': 'signal', 'bars_held': x_idx - e_idx,
             'rank': rng.random(len(e_idx)), 'entry_idx': e_idx, 'exit_idx': x_idx,
+            'add_idx': -1, 'add_price': np.nan,
         })
         r['gross_return'] = r['exit_price'] / r['entry_price'] - 1.0
         r = r.sort_values(['entry_date', 'rank']).reset_index(drop=True)
-        rr = simulate_portfolio(fs, r, start, end, max_positions=params.max_positions, cost_per_side=cost_per_side)
+        rr = simulate_portfolio(fs, r, start, end, max_positions=params.max_positions, max_new_per_day=params.max_new_per_day, cost_per_side=cost_per_side)
         values.append(compute_metrics(rr.equity, rr.trades, rr.exposure)[metric])
     values = np.array(values)
     return {'actual': float(actual), 'random_median': float(np.median(values)),
