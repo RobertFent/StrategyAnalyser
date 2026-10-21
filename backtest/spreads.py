@@ -469,8 +469,11 @@ def _html(text: str, eq: pd.Series, df: pd.DataFrame, holdout: str, title: str =
             '</main></body>')
 
 
+# What --tune tries. 'strike' is either "debit:<share of width>" (the strikes that cost that debit, e.g. 0.5 = 4.95 on a
+# $10 width) or "offset:<fraction>" (long strike at that distance from the price). Every value can be changed with
+# --grid key=v1,v2,...  e.g. --grid width=5,10 --grid dte=30,45,60 --grid strike=debit:0.4,debit:0.5,offset:0.01
 GRID = {
-    'offset': [-0.01, 0.0, 0.01, 0.017, 0.03],
+    'strike': ['debit:0.4', 'debit:0.5', 'debit:0.6', 'offset:0.0', 'offset:0.017'],
     'width': [5.0, 10.0, 20.0],
     'dte': [30, 60, 90],
     'target': [0.8, 0.99],
@@ -480,20 +483,69 @@ GRID = {
 }
 
 
-def tune(df: pd.DataFrame, base: SpreadParams, start: str, holdout: str, metric: str = 'calmar') -> pd.DataFrame:
-    base = SpreadParams(**{**asdict(base), 'fixed_debit': 0.0})   # every setup at model prices (a fixed debit only fits one setup)
+def parse_grid(items: list[str] | None) -> dict:
+    """--grid key=v1,v2 overrides one row of GRID."""
+    grid = {k: list(v) for k, v in GRID.items()}
+    for item in items or []:
+        if '=' not in item:
+            raise SystemExit(f'--grid expects key=v1,v2 (got {item!r})')
+        key, vals = item.split('=', 1)
+        key = key.strip()
+        if key not in grid:
+            raise SystemExit(f'--grid: unknown key {key!r}; choose from {", ".join(grid)}')
+        parsed = []
+        for v in vals.split(','):
+            v = v.strip()
+            if not v:
+                continue
+            if key in ('strike', 'cadence'):
+                parsed.append(v)
+            elif key in ('dte', 'trend_ma'):
+                parsed.append(int(float(v)))
+            else:
+                parsed.append(float(v))
+        if parsed:
+            grid[key] = parsed
+    for v in grid['strike']:
+        if not (v.startswith('debit:') or v.startswith('offset:')):
+            raise SystemExit(f'strike values look like debit:0.5 or offset:0.017 (got {v!r})')
+    for v in grid['cadence']:
+        if v not in ('expiry', 'monthly', 'weekly', 'next'):
+            raise SystemExit(f'cadence must be expiry, monthly, weekly or next (got {v!r})')
+    return grid
+
+
+def _apply(base: SpreadParams, combo: dict) -> SpreadParams:
+    d = {**asdict(base), **{k: v for k, v in combo.items() if k != 'strike'}}
+    kind, val = combo['strike'].split(':')
+    if kind == 'debit':
+        d.update(strike_mode='debit', fixed_debit=round(float(val) * d['width'], 2))
+    else:
+        d.update(strike_mode='offset', fixed_debit=0.0, offset=float(val))
+    return SpreadParams(**d)
+
+
+def tune(df: pd.DataFrame, base: SpreadParams, start: str, holdout: str, metric: str = 'calmar',
+         grid: dict | None = None, max_setups: int = 0, seed: int = 0) -> pd.DataFrame:
+    """Backtest every combination of the grid (or a random sample of `max_setups` of them)."""
+    grid = grid or GRID
+    keys = list(grid)
+    combos = list(itertools.product(*grid.values()))
+    if max_setups and len(combos) > max_setups:
+        rng = np.random.default_rng(seed)
+        combos = [combos[i] for i in sorted(rng.choice(len(combos), max_setups, replace=False))]
     rows = []
-    keys = list(GRID)
-    combos = list(itertools.product(*GRID.values()))
     for i, vals in enumerate(combos):
-        p = SpreadParams(**{**asdict(base), **dict(zip(keys, vals))})
+        combo = dict(zip(keys, vals))
+        p = _apply(base, combo)
         eq, tr = backtest(df, p, start)
         dev = eq[eq.index < holdout]; hold = eq[eq.index >= holdout]
         m_dev = compute_metrics(dev / dev.iloc[0], tr[tr['exit_date'] < holdout] if len(tr) else tr)
         m_hold = compute_metrics(hold / hold.iloc[0], tr[tr['exit_date'] >= holdout] if len(tr) else tr) if len(hold) > 30 else {}
-        rows.append({**dict(zip(keys, vals)), 'dev_cagr': m_dev['cagr'], 'dev_dd': m_dev['max_drawdown'], 'dev_sharpe': m_dev['sharpe'],
+        rows.append({**combo, 'dev_cagr': m_dev['cagr'], 'dev_dd': m_dev['max_drawdown'], 'dev_sharpe': m_dev['sharpe'],
                      'dev_calmar': m_dev['calmar'], 'trades': m_dev['trades'], 'win': m_dev['win_rate'],
-                     'hold_cagr': m_hold.get('cagr', np.nan), 'hold_dd': m_hold.get('max_drawdown', np.nan)})
+                     'hold_cagr': m_hold.get('cagr', np.nan), 'hold_dd': m_hold.get('max_drawdown', np.nan),
+                     'hold_trades': m_hold.get('trades', 0)})
         if (i + 1) % 100 == 0:
             print(f'  {i + 1}/{len(combos)}', flush=True)
     res = pd.DataFrame(rows)
@@ -501,11 +553,28 @@ def tune(df: pd.DataFrame, base: SpreadParams, start: str, holdout: str, metric:
     return res
 
 
+def _match_row(res: pd.DataFrame, p: SpreadParams) -> pd.DataFrame:
+    """The leaderboard row closest to a given setup (same width/expiry/rules, strike within a notch)."""
+    if not len(res):
+        return res
+    def strike_ok(sv: str) -> bool:
+        kind, val = sv.split(':')
+        if p.strike_mode == 'debit' and p.fixed_debit:
+            return kind == 'debit' and abs(float(val) - p.fixed_debit / p.width) < 0.03
+        return kind == 'offset' and abs(float(val) - p.offset) < 1e-6
+    mask = res.apply(lambda r: strike_ok(r['strike']) and abs(r['width'] - p.width) < 1e-9 and int(r['dte']) == p.dte
+                     and abs(r['target'] - p.target) < 1e-9 and abs(r['stop'] - p.stop) < 1e-9
+                     and r['cadence'] == p.cadence and int(r['trend_ma']) == p.trend_ma, axis=1)
+    return res[mask]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--fetch', action='store_true')
     ap.add_argument('--tune', action='store_true')
     ap.add_argument('--metric', default='calmar', choices=['calmar', 'sharpe', 'cagr'])
+    ap.add_argument('--grid', action='append', metavar='KEY=V1,V2', help='change what --tune tries, e.g. --grid dte=30,45,60 (repeatable)')
+    ap.add_argument('--max-setups', type=int, default=0, help='--tune: random sample of at most this many setups (0 = all)')
     ap.add_argument('--start', default='2016-01-01')
     ap.add_argument('--holdout-start', default='2025-01-01')
     ap.add_argument('--params', help='an option plan file from strategies/ (type "spreads"); makes the HTML report like backtest.report')
@@ -540,22 +609,33 @@ def main() -> None:
     out_dir = OUTPUT_DIR / f'spreads_{datetime.now():%Y%m%d_%H%M%S}'
     out_dir.mkdir(parents=True, exist_ok=True)
     if a.tune:
-        print(f'Tuning {int(np.prod([len(v) for v in GRID.values()]))} setups on {a.start}..{a.holdout_start}, ranked by {a.metric} (development period)')
-        res = tune(df, p, a.start, a.holdout_start, a.metric)
+        grid = parse_grid(a.grid)
+        total = int(np.prod([len(v) for v in grid.values()]))
+        n = min(total, a.max_setups) if a.max_setups else total
+        print(f'Tuning {n} of {total} setups on {a.start}..{a.holdout_start}, ranked by {a.metric} (development period)')
+        print('  grid: ' + '; '.join(f'{k} = {", ".join(str(x) for x in v)}' for k, v in grid.items()))
+        res = tune(df, p, a.start, a.holdout_start, a.metric, grid, a.max_setups)
         res.to_csv(out_dir / 'leaderboard.csv', index=False)
-        lines = ['SPY CALL SPREADS - TUNING', f'All setups priced by the model (VIX x {p.iv_mult} as implied vol, plus slippage); '
+        lines = ['SPY CALL SPREADS - TUNING', f'{n} setups, all priced by the model (VIX x {p.iv_mult} as implied vol, plus slippage); '
                  f'development {a.start}..{a.holdout_start}, test period {a.holdout_start}..today. '
-                 'Development numbers are in-sample (the best of many); trust the test period and the spread of results more than the top row.', '',
+                 'Development numbers are in-sample (the best of many); trust the test period and the spread of results more than the top row.',
+                 'strike = debit:X means the strikes that cost X of the width that day (debit:0.5 = $4.95 on a $10 width); '
+                 'offset:X = long strike X from the price.', '',
+                 'Tried: ' + '; '.join(f'{k} = {", ".join(str(x) for x in v)}' for k, v in grid.items()), '',
                  'Top 15 by development ' + a.metric + ':']
         show = res.head(15).copy()
         for c in ('dev_cagr', 'dev_dd', 'win', 'hold_cagr', 'hold_dd'):
             show[c] = (show[c] * 100).round(1)
         lines += ['  ' + l for l in show.round(2).to_string(index=False).split('\n')]
-        yours = res[(res.offset == 0.017) & (res.width == 10) & (res.dte == 60) & (res.target == 0.99) & (res.stop == 0) & (res.cadence == 'expiry') & (res.trend_ma == 200)]
+        yours = _match_row(res, p)
         if len(yours):
             r = yours.iloc[0]; rank = int((res['dev_' + a.metric] > r['dev_' + a.metric]).sum()) + 1
-            lines += ['', f'Your setup (OTM +1.7%, $10 wide, 2 monthly expirations, close at 99%, every third Friday, SPY > 200 MA): rank {rank} of {len(res)}, '
-                          f'development {r.dev_cagr * 100:.1f}%/yr, test period {r.hold_cagr * 100:.1f}%/yr']
+            lines += ['', f'Your setup ({r.strike}, ${p.width:g} wide, {p.dte} days, close at {p.target * 100:.0f}%, {p.cadence}, '
+                          f'trend {p.trend_ma or "none"}): rank {rank} of {len(res)}, development {r.dev_cagr * 100:.1f}%/yr, '
+                          f'test period {r.hold_cagr * 100:.1f}%/yr']
+        tp = res['hold_trades'].median() if 'hold_trades' in res else 0
+        lines += ['', f'Note: the test period holds only ~{tp:.0f} trades per setup; a few trades decide a 2025+ number, so neighbouring rows '
+                      'that disagree wildly (same setup, strike one notch apart) are telling you the result is noise, not that one is better.']
         lines += ['', 'Share of setups that made money in the test period: '
                   f'{(res.hold_cagr > 0).mean() * 100:.0f}%; median test-period return {res.hold_cagr.median() * 100:.1f}%/yr']
         spy = _spy_lines(df, df[df.Date >= a.holdout_start].set_index('Date').index)

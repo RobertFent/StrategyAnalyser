@@ -54,6 +54,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .card[data-mode], details[data-mode] { display:none; } .card[data-mode].show, details[data-mode].show { display:block; }
 .howto { margin-top:14px; background:var(--accent-soft); border:1px solid var(--border); border-radius:12px; padding:10px 16px; font-size:14.5px; }
 .howto summary { cursor:pointer; font-weight:650; } .howto ol { margin:8px 0 6px; padding-left:22px; } .howto li { margin:3px 0; } .howto p { margin:6px 0 2px; color:var(--text-2); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; font-size:13.5px; color:var(--text-2); } .grid2 label { display:flex; flex-direction:column; gap:2px; } .grid2 input[type=text] { width:100%; }
 .readme { font-size:14px; color:var(--text-2); } .readme table { border-collapse:collapse; width:100%; } .readme th, .readme td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; } .readme th { color:var(--text); font-weight:600; white-space:nowrap; }
 </style>
 </head>
@@ -146,7 +147,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 
   <div class="card" data-mode="stocks options">
     <div class="step"><span class="n"></span><h2>Reports</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">What a plan did in the past: verdict, return per year, worst drop, growth of $10,000 against SPY, year by year. Compare puts all plans on one page.</span></span></div>
-    <p>A one-page report for one plan (verdict first), or all saved plans on one page against SPY.</p>
+    <p>A one-page report for one plan (verdict first), or every saved plan, stocks and options, on one page against SPY buy &amp; hold and SPY timing.</p>
     <div class="row">
       <select id="planSel"></select>
       <button class="btn" data-job="report">Report for this plan</button>
@@ -178,10 +179,20 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 
   <div class="card" data-mode="options">
     <div class="step"><span class="n"></span><h2>Try many spread setups</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Tries 720 variants of the routine above: strike placement, width 5/10/20, 30/60/90 days, close at 80% or 99% of the width, stop or none, monthly or weekly, trend filter or none. All priced by the model. The top rows are the best of 720, so expect them to flatter; the test-period column is the honest one, and the rank of your own setup is printed below the table.<br><br><b>Rank by</b>: <b>Calmar</b> = return per unit of worst drop, <b>Sharpe</b> = return per unit of daily wobble, <b>return</b> = growth regardless of drops.</span></span></div>
-    <p>720 variants of width, expiry, close rule, stop, cadence and trend filter, ranked on the development period with the test period next to it. 3–10 minutes.</p>
-    <div class="row">
+    <p>Every combination of the values below (comma-separated; edit freely), ranked on the development period with the test period next to it. About 0.5 s per setup.</p>
+    <div class="grid2">
+      <label>strikes <input type="text" id="gStrike" value="debit:0.4, debit:0.5, debit:0.6, offset:0, offset:0.017" title="debit:X = the strikes that cost X of the width that day (debit:0.5 = 4.95 on a $10 width); offset:X = long strike X from the price (0.017 = +1.7%)"></label>
+      <label>widths $ <input type="text" id="gWidth" value="5, 10, 20"></label>
+      <label>expiries (days) <input type="text" id="gDte" value="30, 60, 90"></label>
+      <label>close at (share of width) <input type="text" id="gTarget" value="0.8, 0.99"></label>
+      <label>stop (share of debit lost) <input type="text" id="gStop" value="0, 0.5"></label>
+      <label>cadence <input type="text" id="gCadence" value="expiry, weekly" title="expiry = every third Friday, monthly = first trading day, weekly, next = one at a time"></label>
+      <label>trend filter (days, 0 = none) <input type="text" id="gTrend" value="0, 200"></label>
+      <label>at most <input type="number" id="gMax" value="0" min="0" step="100" style="width:80px"> setups (0 = all; a random sample above that)</label>
+    </div>
+    <div class="row" style="margin-top:8px">
       <select id="spMetric"><option value="calmar" selected>rank by Calmar</option><option value="sharpe">rank by Sharpe</option><option value="cagr">rank by return</option></select>
-      <button class="btn" data-job="spreads_tune">Try 720 setups</button>
+      <button class="btn" data-job="spreads_tune">Try <span id="gCount">720</span> setups</button>
     </div>
   </div>
 
@@ -261,10 +272,22 @@ function jobOpts(btn) {
     o.debit = $('spDebit').value; o.cadence = $('spCadence').value; o.trend_ma = $('spTrend').value; o.stop = $('spStop').value; o.metric = $('spMetric').value;
     o.strike_mode = $('spStrike').value; o.name = $('spName').value; o.target_div = $('spTargetDiv').value;
   }
+  if (kind === 'spreads_tune') {
+    o.grid = {strike: $('gStrike').value, width: $('gWidth').value, dte: $('gDte').value, target: $('gTarget').value,
+              stop: $('gStop').value, cadence: $('gCadence').value, trend_ma: $('gTrend').value};
+    o.max_setups = $('gMax').value;
+  }
   if (kind === 'spreads_save') { o.name = $('spName').value; }
-  if (kind === 'compare' && MODE === 'options') o.files = STRATS.filter(x => x.type === 'spreads').map(x => x.file).concat(['willr.json']);
   return {kind, opts: o};
 }
+function gridCount() {
+  const n = id => $(id).value.split(',').map(s => s.trim()).filter(Boolean).length || 1;
+  let c = ['gStrike', 'gWidth', 'gDte', 'gTarget', 'gStop', 'gCadence', 'gTrend'].reduce((a, id) => a * n(id), 1);
+  const m = parseInt($('gMax').value) || 0; if (m && m < c) c = m;
+  $('gCount').textContent = c;
+}
+['gStrike', 'gWidth', 'gDte', 'gTarget', 'gStop', 'gCadence', 'gTrend', 'gMax'].forEach(id => $(id).addEventListener('input', gridCount));
+gridCount();
 $('spStrike').addEventListener('change', () => { $('spOffsetWrap').style.display = $('spStrike').value === 'offset' ? '' : 'none'; });
 document.querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', async () => {
   msg('');

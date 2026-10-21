@@ -221,9 +221,10 @@ luck check (the stress test of step 4 is for stock plans only). `strategies/bcs_
 at risk in total, split over the spreads that overlap), SPY buy & hold and SPY timing on the same dates, per-spread
 statistics (average result in % of the debit, how many closed at the target, at expiry, at the stop), the same
 routine at 2/5/10/20% at risk, and one-contract constant size: total P&L on the buying power tied up at once.
-Tune tries 720 setups (long strike −1% to +3% from the price, width 5/10/20, 30/60/90 days, close at 80% or 99% of
-the width, stop or none, monthly or weekly, trend filter or none), ranks them on the development period and shows
-the test period next to it; your own setup's rank is printed below the table. The model's weak spot is the
+*Try many setups* backtests every combination of the values you type in (strikes as `debit:0.5` = the strikes that cost
+half the width that day, or `offset:0.017` = long strike 1.7% above the price; widths; expiries; close rules; stops;
+cadence; trend filter), or a random sample when you cap the number. It ranks them on the development period and shows
+the test period next to it; your own setup's rank is printed below the table. In the Terminal: `--tune --grid dte=30,45,60`. The model's weak spot is the
 early close: it assumes the spread trades at its model value, so treat a routine that lives on early closes with
 more suspicion than one that lets spreads expire.
 

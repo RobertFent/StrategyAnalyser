@@ -104,7 +104,28 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
             metric = opts.get('metric', 'calmar')
             if metric not in ('calmar', 'sharpe', 'cagr'):
                 raise ValueError('Unknown metric.')
-            return cmd + ['--tune', '--metric', metric], 'Tune SPY call spreads (720 setups)'
+            cmd += ['--tune', '--metric', metric]
+            grid = opts.get('grid') or {}
+            if not isinstance(grid, dict):
+                raise ValueError('grid must be an object.')
+            count = 1
+            for key, val in grid.items():
+                if key not in ('strike', 'width', 'dte', 'target', 'stop', 'cadence', 'trend_ma'):
+                    raise ValueError(f'Unknown grid key {key}.')
+                vals = [v.strip() for v in str(val).split(',') if v.strip()]
+                if not vals or any(not re.fullmatch(r'[\w.:+-]{1,20}', v) for v in vals):
+                    raise ValueError(f'Bad values for {key}.')
+                count *= len(vals)
+                cmd += ['--grid', f'{key}={",".join(vals)}']
+            m = int(opts.get('max_setups') or 0)
+            if m < 0 or m > 20000:
+                raise ValueError('max setups out of range.')
+            if m:
+                cmd += ['--max-setups', str(m)]
+            n = min(count, m) if m else count
+            if n > 5000:
+                raise ValueError(f'{n} setups is too many for one run (about {n // 120} minutes); cut the lists or set "at most".')
+            return cmd, f'Try {n} spread setups'
         return cmd, 'Backtest SPY call spreads'
     raise ValueError('Unknown job.')
 
