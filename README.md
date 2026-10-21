@@ -24,12 +24,13 @@ on Windows tick *"Add Python to PATH"* in the installer). Then:
 | 3 | **Compare all plans with SPY** | every saved rule set on one page against SPY buy & hold and SPY timing |
 | 4 | **Quick / Full** stress test | verdict and luck checks (1 min), or also neighbouring settings, costs and a random-entry test (5 min); text report |
 | 5 | **Start search** | tries hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
-| 6 | **Backtest this setup** / **Save as a plan** / **Tune** | SPY bull call spreads (buy a call, sell a higher one): width, expiry, close rule and the debit you pay; saved plans show up in step 3 like any other. Tune tries 720 variants. Needs *Download SPY + VIX* once. |
 
 **In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). Your own rules → step 2
 Planner: write them down first, test once, don't tweak until it looks good. See results → step 3 *Report for this plan*
 or *Compare all plans with SPY*. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
 Results appear under *Jobs* → *Open report*; read the **test period** and the **verdict** first.
+
+The switch at the top chooses **Stocks** (the steps above) or **Options: SPY call spreads** (its own four steps: *Download SPY + VIX*, *Build your spread routine* with width, expiry, the debit you pay and the close rule → *Save as a plan*, *Reports* with the same one-page report, *Try 720 setups*).
 
 Long steps run in the background; their progress and results appear under *Jobs* on the right. You can close the
 browser tab; the jobs keep running while the launcher window is open.

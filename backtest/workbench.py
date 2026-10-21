@@ -48,6 +48,10 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .info::before { content:"i"; }
 .info .tip { display:none; text-align:left; position:absolute; left:50%; top:26px; transform:translateX(-50%); width:300px; background:var(--text); color:var(--bg); font:400 13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-style:normal; padding:10px 12px; border-radius:9px; box-shadow:0 6px 20px rgba(0,0,0,.18); z-index:5; }
 .info:hover .tip, .info:focus .tip { display:block; }
+.switch { display:flex; gap:6px; margin-top:16px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:4px; width:max-content; max-width:100%; }
+.seg { font:inherit; font-weight:600; font-size:14.5px; border:0; background:transparent; color:var(--text-2); padding:8px 14px; border-radius:9px; cursor:pointer; }
+.seg.cur { background:var(--accent); color:var(--accent-ink); }
+.card[data-mode], details[data-mode] { display:none; } .card[data-mode].show, details[data-mode].show { display:block; }
 .howto { margin-top:14px; background:var(--accent-soft); border:1px solid var(--border); border-radius:12px; padding:10px 16px; font-size:14.5px; }
 .howto summary { cursor:pointer; font-weight:650; } .howto ol { margin:8px 0 6px; padding-left:22px; } .howto li { margin:3px 0; } .howto p { margin:6px 0 2px; color:var(--text-2); }
 .readme { font-size:14px; color:var(--text-2); } .readme table { border-collapse:collapse; width:100%; } .readme th, .readme td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; } .readme th { color:var(--text); font-weight:600; white-space:nowrap; }
@@ -58,7 +62,12 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 <nav><a href="/workbench" class="cur">Workbench</a><a href="/">Planner</a></nav>
 <header><h1>Strategy Workbench</h1><p>Every step of the guide as a button. Long steps run in the background; their progress shows on the right.</p></header>
 
-<details class="howto" open>
+<div class="switch" role="tablist">
+  <button class="seg cur" data-mode="stocks" role="tab">Stocks: buy &amp; sell S&amp;P 500 shares</button>
+  <button class="seg" data-mode="options" role="tab">Options: SPY call spreads</button>
+</div>
+
+<details class="howto" open data-mode="stocks">
   <summary>How to use</summary>
   <ol>
     <li><b>First time:</b> step 1, <i>Download all price data</i> (1–2 min). Later just <i>Add the latest trading days</i>.</li>
@@ -68,11 +77,21 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </ol>
   <p>Results appear under <b>Jobs</b> on the right: click <i>Open report</i>. Read the <b>test period</b> and the <b>verdict</b> first; all 7 checks must pass before paper trading. Close this tab any time; jobs keep running while the launcher window is open.</p>
 </details>
+<details class="howto" open data-mode="options">
+  <summary>How to use</summary>
+  <ol>
+    <li><b>First time:</b> step 1, <i>Download SPY + VIX</i> (seconds). Repeat now and then for the latest days.</li>
+    <li><b>Your routine:</b> step 2, fill in width, expiry, the debit you pay and the close rule → <i>Backtest this setup</i> for a quick text result, <i>Save as a plan</i> to keep it.</li>
+    <li><b>See results:</b> step 3, pick the plan → <i>Report for this plan</i> (the same one-page report as for stock plans), or compare it with the stock plans and SPY.</li>
+    <li><b>Look for better settings:</b> step 4 tries 720 variants; treat the top rows with suspicion, read the test-period column.</li>
+  </ol>
+  <p>The model prices every spread with Black-Scholes from the VIX of the day (no option quotes exist for 14 years); the payoff at expiry is exact. Results appear under <b>Jobs</b> on the right.</p>
+</details>
 
 <div class="layout">
 <div>
-  <div class="card">
-    <div class="step"><span class="n">1</span><h2>Price data</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The raw material: daily open/high/low/close for every stock that was in the S&amp;P 500 since 2016, plus SPY. Do this once, then only add the latest days. Nothing else works without it.</span></span></div>
+  <div class="card" data-mode="stocks">
+    <div class="step"><span class="n"></span><h2>Price data</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The raw material: daily open/high/low/close for every stock that was in the S&amp;P 500 since 2016, plus SPY. Do this once, then only add the latest days. Nothing else works without it.</span></span></div>
     <p>About 14 years of daily prices for every stock that was in the S&amp;P 500 since 2016, plus SPY. First download takes 1–2 minutes. Backtests only buy a stock while it was in the index.</p>
     <div class="status" id="dataStatus"><span>Data</span><b>checking…</b></div>
     <div class="row" style="margin-top:12px">
@@ -83,15 +102,51 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
   </div>
 
-  <div class="card">
-    <div class="step"><span class="n">2</span><h2>Build your own plan</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Turn a trading idea into exact rules: what to buy, when, when to sell, how many positions. Saved as a plan file you can report and stress-test. Write the rules down before you see any result.</span></span></div>
+  <div class="card" data-mode="options">
+    <div class="step"><span class="n"></span><h2>SPY and VIX data</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">SPY's daily close (unadjusted, so dividends hit the calls as in real life), the VIX as implied volatility and the 13-week T-bill as the interest rate. That is all the model needs to price a spread on any day since 2010.</span></span></div>
+    <p>Daily SPY, VIX and T-bill history since 2010. Takes a few seconds.</p>
+    <div class="status" id="optStatus"><span>Data</span><b>checking…</b></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" data-job="spreads_fetch">Download SPY + VIX</button>
+      <button class="btn ghost" data-job="tests">Self-test</button>
+    </div>
+  </div>
+
+  <div class="card" data-mode="stocks">
+    <div class="step"><span class="n"></span><h2>Build your own plan</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Turn a trading idea into exact rules: what to buy, when, when to sell, how many positions. Saved as a plan file you can report and stress-test. Write the rules down before you see any result.</span></span></div>
     <p>Describe the rules in the <a href="/">Planner</a>, save, run. Write the rules down before you look at any result.</p>
     <div class="row"><a class="btn" href="/">Open the Planner</a></div>
   </div>
 
-  <div class="card">
-    <div class="step"><span class="n">3</span><h2>Reports</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">What a plan did in the past: verdict, return per year, worst drop, growth of $10,000 against SPY, year by year. Compare puts all plans on one page.</span></span></div>
-    <p>A one-page report for one rule set (verdict first), or all saved rule sets on one page against SPY.</p>
+  <div class="card" data-mode="options">
+    <div class="step"><span class="n"></span><h2>Build your spread routine</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">A bull call spread: buy a SPY call, sell a call `width` dollars higher, same expiry. By default the strikes are wherever the market prices the debit you pay that day (a 4.95 debit on a $10 width is roughly an at-the-money bet). Close at a share of the width, at a stop, or let it expire. Save as a plan puts it into the plan list of step 3.</span></span></div>
+    <p>Fill in how you trade; <i>Backtest this setup</i> gives a quick text result, <i>Save as a plan</i> keeps it for reports and comparisons.</p>
+    <div class="row" style="margin-bottom:8px">
+      <label class="hint">width $<input type="number" id="spWidth" value="10" step="1" style="width:55px"></label>
+      <label class="hint">debit you pay $<input type="number" id="spDebit" value="4.95" step="0.05" style="width:65px"></label>
+      <label class="hint">expiry <input type="number" id="spDte" value="60" step="1" style="width:55px"> days</label>
+      <select id="spCadence"><option value="expiry" selected>every third Friday (monthly expiration)</option><option value="monthly">first trading day of the month</option><option value="weekly">new spread weekly</option><option value="next">one at a time</option></select>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <label class="hint">close at <input type="number" id="spTarget" value="99" step="1" style="width:55px">% of width</label>
+      <label class="hint">(<input type="number" id="spTargetDiv" value="95" step="1" style="width:55px">% in dividend months)</label>
+      <label class="hint">stop at <input type="number" id="spStop" value="0" step="10" style="width:50px">% loss</label>
+      <select id="spTrend"><option value="200" selected>only above 200-day average</option><option value="0">always</option></select>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <select id="spStrike"><option value="debit" selected>strikes that cost the debit that day</option><option value="offset">long strike at a fixed distance</option></select>
+      <label class="hint" id="spOffsetWrap" style="display:none">long strike <input type="number" id="spOffset" value="1.7" step="0.1" style="width:60px">% from price</label>
+    </div>
+    <div class="row">
+      <button class="btn" data-job="spreads">Backtest this setup</button>
+      <input type="text" id="spName" placeholder="plan name" value="SPY call spread 4.95" style="width:170px">
+      <button class="btn ghost" data-job="spreads_save">Save as a plan</button>
+    </div>
+  </div>
+
+  <div class="card" data-mode="stocks options">
+    <div class="step"><span class="n"></span><h2>Reports</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">What a plan did in the past: verdict, return per year, worst drop, growth of $10,000 against SPY, year by year. Compare puts all plans on one page.</span></span></div>
+    <p>A one-page report for one plan (verdict first), or all saved plans on one page against SPY.</p>
     <div class="row">
       <select id="planSel"></select>
       <button class="btn" data-job="report">Report for this plan</button>
@@ -99,8 +154,8 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
   </div>
 
-  <div class="card">
-    <div class="step"><span class="n">4</span><h2>Stress-test a plan</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Should you believe the report? Checks whether the result could be luck, whether small changes to the settings break it, whether it survives double costs, and whether random entries do just as well.</span></span></div>
+  <div class="card" data-mode="stocks">
+    <div class="step"><span class="n"></span><h2>Stress-test a plan</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Should you believe the report? Checks whether the result could be luck, whether small changes to the settings break it, whether it survives double costs, and whether random entries do just as well.</span></span></div>
     <p>Quick = verdict and luck checks (about a minute). Full = plus neighbouring settings, costs, random-entry test (about five minutes). The result is a text report.</p>
     <div class="row">
       <select id="planSel2"></select>
@@ -110,8 +165,8 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
   </div>
 
-  <div class="card">
-    <div class="step"><span class="n">5</span><h2>Search many rule sets</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Let the computer try hundreds of rule combinations and keep what holds up in walk-forward tests. Use it for ideas, then treat the best set with suspicion: the more you search, the more luck you find.<br><br><b>Rank by</b> decides what "best" means: <b>Calmar</b> = return per unit of worst drop (smooth equity, the default), <b>Sharpe</b> = return per unit of daily wobble, <b>return</b> = highest growth regardless of drops (picks wild sets).</span></span></div>
+  <div class="card" data-mode="stocks">
+    <div class="step"><span class="n"></span><h2>Search many rule sets</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Let the computer try hundreds of rule combinations and keep what holds up in walk-forward tests. Use it for ideas, then treat the best set with suspicion: the more you search, the more luck you find.<br><br><b>Rank by</b> decides what "best" means: <b>Calmar</b> = return per unit of worst drop (smooth equity, the default), <b>Sharpe</b> = return per unit of daily wobble, <b>return</b> = highest growth regardless of drops (picks wild sets).</span></span></div>
     <p>Tries many settings with walk-forward validation (rules picked on 3 years, traded the next). 5–15 minutes. Judge the result by “Stitched OOS” against the SPY lines, not by the best in-sample score; the more you search, the more the best result is luck.</p>
     <div class="row">
       <select id="space"><option value="default">Oversold indicators (default)</option><option value="momentum">Momentum / breakouts</option><option value="indicators">More indicators</option><option value="breadth">Broad pullbacks</option><option value="exits">Exit variants</option></select>
@@ -121,33 +176,16 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
   </div>
 
-  <div class="card">
-    <div class="step"><span class="n">6</span><h2>Options: SPY call spreads</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Backtests a bull call spread routine on SPY without option quotes: each spread is priced with Black-Scholes using the VIX of the day, the payoff at expiry is exact. Enter the debit you really pay and the model is scaled to it. Tune tries 720 variants (strikes, width, expiry, close rule, stop, cadence, trend filter).</span></span></div>
-    <p>Buy a call, sell a higher call, same expiry. Needs SPY and VIX history once (<i>Download SPY + VIX</i>). <i>Save as a plan</i> puts the setup into the plan list, so step 3 reports and compares it like any other plan.</p>
-    <div class="row" style="margin-bottom:8px">
-      <select id="spStrike"><option value="debit" selected>strikes that cost the debit that day</option><option value="offset">long strike at a fixed distance</option></select>
-      <label class="hint" id="spOffsetWrap" style="display:none">long strike <input type="number" id="spOffset" value="1.7" step="0.1" style="width:60px">% from price</label>
-      <label class="hint">width $<input type="number" id="spWidth" value="10" step="1" style="width:55px"></label>
-      <label class="hint">expiry <input type="number" id="spDte" value="60" step="1" style="width:55px"> days</label>
-      <label class="hint">close at <input type="number" id="spTarget" value="99" step="1" style="width:55px">% of width</label>
-      <label class="hint">(<input type="number" id="spTargetDiv" value="95" step="1" style="width:55px">% in dividend months)</label>
-    </div>
-    <div class="row" style="margin-bottom:8px">
-      <label class="hint">debit you pay $<input type="number" id="spDebit" value="4.95" step="0.05" style="width:65px"></label>
-      <select id="spCadence"><option value="expiry" selected>every third Friday (monthly expiration)</option><option value="monthly">first trading day of the month</option><option value="weekly">new spread weekly</option><option value="next">one at a time</option></select>
-      <select id="spTrend"><option value="200" selected>only above 200-day average</option><option value="0">always</option></select>
-      <label class="hint">stop at <input type="number" id="spStop" value="0" step="10" style="width:50px">% loss</label>
-    </div>
+  <div class="card" data-mode="options">
+    <div class="step"><span class="n"></span><h2>Try many spread setups</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Tries 720 variants of the routine above: strike placement, width 5/10/20, 30/60/90 days, close at 80% or 99% of the width, stop or none, monthly or weekly, trend filter or none. All priced by the model. The top rows are the best of 720, so expect them to flatter; the test-period column is the honest one, and the rank of your own setup is printed below the table.<br><br><b>Rank by</b>: <b>Calmar</b> = return per unit of worst drop, <b>Sharpe</b> = return per unit of daily wobble, <b>return</b> = growth regardless of drops.</span></span></div>
+    <p>720 variants of width, expiry, close rule, stop, cadence and trend filter, ranked on the development period with the test period next to it. 3–10 minutes.</p>
     <div class="row">
-      <button class="btn" data-job="spreads">Backtest this setup</button>
-      <button class="btn ghost" data-job="spreads_save">Save as a plan</button>
-      <input type="text" id="spName" placeholder="plan name" value="SPY call spread 4.95" style="width:170px">
-      <button class="btn ghost" data-job="spreads_tune">Tune (5–10 min)</button>
-      <button class="btn ghost" data-job="spreads_fetch">Download SPY + VIX</button>
+      <select id="spMetric"><option value="calmar" selected>rank by Calmar</option><option value="sharpe">rank by Sharpe</option><option value="cagr">rank by return</option></select>
+      <button class="btn" data-job="spreads_tune">Try 720 setups</button>
     </div>
   </div>
 
-  <div class="card readme">
+  <div class="card readme" data-mode="stocks options">
     <div class="step"><span class="n">?</span><h2>How to read a result</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The honest numbers are the test period and the verdict. Everything else can look good by chance.</span></span></div>
     <table>
       <tr><th>Verdict</th><td>7 checks agreed on before testing. All must pass before paper trading.</td></tr>
@@ -178,16 +216,37 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function msg(t) { const m = $('msg'); m.className = 'msg' + (t ? ' err' : ''); m.textContent = t || ''; }
 
+let MODE = 'stocks', STRATS = [];
+try { MODE = localStorage.getItem('wb_mode') || 'stocks'; } catch (e) {}
+function setMode(m) {
+  MODE = m; try { localStorage.setItem('wb_mode', m); } catch (e) {}
+  document.querySelectorAll('.seg').forEach(b => b.classList.toggle('cur', b.dataset.mode === m));
+  let n = 0;
+  document.querySelectorAll('[data-mode]').forEach(el => {
+    const show = el.dataset.mode.split(' ').includes(m); el.classList.toggle('show', show);
+    const num = el.querySelector('.step .n'); if (show && num && num.textContent !== '?') num.textContent = ++n;
+  });
+  fillPlans();
+}
+function fillPlans() {
+  const opt = x => `<option value="${esc(x.file)}">${esc(x.name)}</option>`;
+  const fill = (id, list) => { const sel = $(id), cur = sel.value; sel.innerHTML = list.map(opt).join(''); if (cur && list.some(x => x.file === cur)) sel.value = cur; };
+  const mine = STRATS.filter(x => (x.type === 'spreads') === (MODE === 'options'));
+  fill('planSel', mine.length ? mine : STRATS); fill('planSel2', STRATS.filter(x => x.type !== 'spreads'));
+}
+document.querySelectorAll('.seg').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
 async function status() {
   const s = await (await fetch('/api/status')).json();
   const d = $('dataStatus');
+  STRATS = s.strategies; fillPlans();
+  const o = $('optStatus'), od = s.options || {};
+  o.innerHTML = od.has_data ? `<span>Data</span><b><span class="pill ok">ready</span> SPY, VIX${od.has_rate ? ' and T-bill' : ' <span class="pill warn">(no T-bill rate: download again)</span>'}, ${esc(od.first)} – ${esc(od.last)}</b>`
+                            : '<span>Data</span><b><span class="pill bad">missing</span> click “Download SPY + VIX”</b>';
   if (!s.has_data) { d.innerHTML = '<span>Data</span><b><span class="pill bad">missing</span> click “Download all price data”</b>'; return; }
   d.innerHTML = `<span>Data</span><b><span class="pill ok">ready</span> ${s.tickers} stocks, ${esc(s.first)} – ${esc(s.last)}</b>` +
     `<span>Index history</span><b>${s.membership ? 'point-in-time members on' : '<span class="pill warn">today\'s members only</span>'}` +
     (s.coverage != null ? `, ${s.coverage}% of member-days have prices` : '') + `</b>`;
-  const opt = x => `<option value="${esc(x.file)}">${esc(x.name)}</option>`;
-  const fill = (id, list) => { const sel = $(id), cur = sel.value; sel.innerHTML = list.map(opt).join(''); if (cur) sel.value = cur; };
-  fill('planSel', s.strategies); fill('planSel2', s.strategies.filter(x => x.type !== 'spreads'));
   const reps = $('reports'); reps.innerHTML = s.reports.length ? '' : '<li class="empty">No reports yet.</li>';
   s.reports.forEach(r => { const li = document.createElement('li'); li.innerHTML = `<a href="/reports/${encodeURIComponent(r.file)}">${esc(r.label)}</a>`; reps.appendChild(li); });
 }
@@ -197,12 +256,13 @@ function jobOpts(btn) {
   if (kind === 'report') o.file = $('planSel').value;
   if (kind === 'analyze') { o.file = $('planSel2').value; o.quick = btn.dataset.quick === '1'; o.trials = $('trials').value; }
   if (kind === 'tune') { o.space = $('space').value; o.n_iter = $('niter').value; o.metric = $('metric').value; }
-  if (kind === 'spreads' || kind === 'spreads_tune') {
+  if (kind === 'spreads' || kind === 'spreads_tune' || kind === 'spreads_save') {
     o.offset = $('spOffset').value; o.width = $('spWidth').value; o.dte = $('spDte').value; o.target = $('spTarget').value;
-    o.debit = $('spDebit').value; o.cadence = $('spCadence').value; o.trend_ma = $('spTrend').value; o.stop = $('spStop').value; o.metric = $('metric').value;
+    o.debit = $('spDebit').value; o.cadence = $('spCadence').value; o.trend_ma = $('spTrend').value; o.stop = $('spStop').value; o.metric = $('spMetric').value;
     o.strike_mode = $('spStrike').value; o.name = $('spName').value; o.target_div = $('spTargetDiv').value;
   }
   if (kind === 'spreads_save') { o.name = $('spName').value; }
+  if (kind === 'compare' && MODE === 'options') o.files = STRATS.filter(x => x.type === 'spreads').map(x => x.file).concat(['willr.json']);
   return {kind, opts: o};
 }
 $('spStrike').addEventListener('change', () => { $('spOffsetWrap').style.display = $('spStrike').value === 'offset' ? '' : 'none'; });
@@ -253,7 +313,7 @@ async function poll() {
   clearTimeout(timer); timer = setTimeout(poll, running ? 2000 : 8000);
 }
 function pollSoon() { clearTimeout(timer); timer = setTimeout(poll, 300); }
-status(); poll();
+setMode(MODE); status(); poll();
 </script>
 </body>
 </html>

@@ -148,8 +148,15 @@ def _best_params_path(rel: str) -> Path | None:
 def data_status() -> dict:
     """What the workbench shows under 'Price data'."""
     from backtest.data import DATA_DIR, load_universe
-    out = {'has_data': False, 'strategies': [{'file': s['file'], 'name': s['name']} for s in list_strategies()],
-           'reports': list_reports()}
+    out = {'has_data': False, 'strategies': [{'file': s['file'], 'name': s['name'], 'type': s.get('type', 'stocks')} for s in list_strategies()],
+           'reports': list_reports(), 'options': {'has_data': False}}
+    try:
+        from backtest.spreads import load as load_options
+        od = load_options()
+        out['options'] = {'has_data': True, 'first': str(od['Date'].iloc[0].date()), 'last': str(od['Date'].iloc[-1].date()),
+                          'has_rate': 'Rate' in od}
+    except FileNotFoundError:
+        pass
     try:
         from backtest.data import load_table
         prices = load_table('prices')

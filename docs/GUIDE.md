@@ -210,7 +210,7 @@ Tries many rule sets and tells you how good "pick the best" really is:
    by the search; its test-period and stitched-OOS numbers are not.
 4. Constraints: at least 20 trades per window and a worst drop no deeper than 35%, otherwise the set is discarded.
 
-### Options: SPY call spreads (step 6)
+### Options: SPY call spreads (the Options switch in the Workbench)
 No option quotes exist for 14 years, so the tool models them: each spread is priced with Black-Scholes, using the
 VIX of the day as implied volatility, and the payoff at expiry is exact (from SPY's close; SPY unadjusted, so
 dividends hit the calls as in real life). By default the strikes are chosen the way you trade: *the spread that
