@@ -542,7 +542,7 @@ def tune(df: pd.DataFrame, base: SpreadParams, start: str, holdout: str, metric:
         dev = eq[eq.index < holdout]; hold = eq[eq.index >= holdout]
         m_dev = compute_metrics(dev / dev.iloc[0], tr[tr['exit_date'] < holdout] if len(tr) else tr)
         m_hold = compute_metrics(hold / hold.iloc[0], tr[tr['exit_date'] >= holdout] if len(tr) else tr) if len(hold) > 30 else {}
-        rows.append({**combo, 'dev_cagr': m_dev['cagr'], 'dev_dd': m_dev['max_drawdown'], 'dev_sharpe': m_dev['sharpe'],
+        rows.append({**combo, 'debit': round(float(tr['debit'].mean()), 2) if len(tr) else np.nan, 'dev_cagr': m_dev['cagr'], 'dev_dd': m_dev['max_drawdown'], 'dev_sharpe': m_dev['sharpe'],
                      'dev_calmar': m_dev['calmar'], 'trades': m_dev['trades'], 'win': m_dev['win_rate'],
                      'hold_cagr': m_hold.get('cagr', np.nan), 'hold_dd': m_hold.get('max_drawdown', np.nan),
                      'hold_trades': m_hold.get('trades', 0)})
@@ -620,7 +620,7 @@ def main() -> None:
                  f'development {a.start}..{a.holdout_start}, test period {a.holdout_start}..today. '
                  'Development numbers are in-sample (the best of many); trust the test period and the spread of results more than the top row.',
                  'strike = debit:X means the strikes that cost X of the width that day (debit:0.5 = $4.95 on a $10 width); '
-                 'offset:X = long strike X from the price.', '',
+                 'offset:X = long strike X from the price. debit = average price paid per spread.', '',
                  'Tried: ' + '; '.join(f'{k} = {", ".join(str(x) for x in v)}' for k, v in grid.items()), '',
                  'Top 15 by development ' + a.metric + ':']
         show = res.head(15).copy()
