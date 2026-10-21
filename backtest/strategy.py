@@ -11,7 +11,7 @@ MOMENTUM / TREND (entry_indicator = 'rs' or 'breakout')
     'breakout': close > highest high of the previous entry_length days (today excluded)
 
 ENTRY also requires (evaluated at the close of day t, executed at next open by default)
-    Close > SMA(trend_ma)            if trend_ma > 0
+    Close > SMA(trend_ma)            if trend_ma > 0 (or Close <= SMA * (1 - trend_below) if trend_below > 0)
     AND SPY Close > SPY SMA(market_ma)   if market_ma > 0
     AND Close >= min_price AND 20d avg dollar volume >= min_dollar_volume
     AND (optional) >= breadth_min of the universe oversold the same day
@@ -58,6 +58,7 @@ class StrategyParams:
     exit_length: int = 0                # 0 = same as entry
     exit_threshold: float = 50.0
     trend_ma: int = 0                   # 0 = off, e.g. 200 -> Close > SMA200
+    trend_below: float = 0.0            # if > 0: flip the trend filter: Close <= SMA(trend_ma) * (1 - trend_below), e.g. 0.15 = at least 15% below
     market_ma: int = 0                  # 0 = off, e.g. 200 -> SPY > SMA200
     stop_adr_mult: float = 0.0          # 0 = no stop
     trail_adr_mult: float = 0.0         # 0 = off; trailing stop = highest high since entry - mult * ADR(14)
@@ -160,7 +161,9 @@ class StrategyParams:
             buy.append(f'{label(ind, self.entry_length)} {how} {lvl(ind, self.entry_threshold)}')
             if self.breadth_min:
                 buy.append(f'at least {self.breadth_min * 100:g}% of all stocks are that oversold on the same day')
-        if self.trend_ma:
+        if self.trend_ma and self.trend_below:
+            buy.append(f'the stock is at least {self.trend_below * 100:g}% below its {self.trend_ma}-day average (deeply beaten down)')
+        elif self.trend_ma:
             buy.append(f'the stock is above its {self.trend_ma}-day average')
         if self.market_ma:
             buy.append(f'SPY is above its {self.market_ma}-day average')
@@ -213,7 +216,9 @@ class StrategyParams:
 def filter_mask(fs: FeatureStore, p: StrategyParams) -> np.ndarray:
     """Rows that pass every entry condition EXCEPT the indicator itself (trend, market, liquidity, membership)."""
     ok = ~np.isnan(fs.get('adr', p.adr_length))
-    if p.trend_ma:
+    if p.trend_ma and p.trend_below:
+        ok &= fs.close <= fs.get('sma', p.trend_ma) * (1.0 - p.trend_below)   # deep below the average
+    elif p.trend_ma:
         ok &= fs.close > fs.get('sma', p.trend_ma)  # NaN compares False -> no trade during warm-up
     if p.market_ma:
         ok &= fs.get('market_ok', p.market_ma)

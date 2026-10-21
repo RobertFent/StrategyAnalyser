@@ -64,6 +64,15 @@ def slugify(text: str) -> str:
     return re.sub(r'[^a-z0-9]+', '_', text.lower()).strip('_')[:60] or 'plan'
 
 
+def trend_from(value) -> dict:
+    """Form value '200' -> above the 200-day average; '200:-0.15' -> at least 15% below it."""
+    s = str(value or '0')
+    if ':' in s:
+        ma, gap = s.split(':', 1)
+        return {'trend_ma': int(float(ma)), 'trend_below': abs(float(gap))}
+    return {'trend_ma': int(float(s)), 'trend_below': 0.0}
+
+
 def params_from_form(f: dict) -> StrategyParams:
     """Form values (native indicator scale) -> StrategyParams (0..100 scale)."""
     family = f.get('family', 'reversion')
@@ -87,7 +96,7 @@ def params_from_form(f: dict) -> StrategyParams:
             exit_rule=exit_rule,
             exit_threshold=num('mom_exit_rank', 50),
             exit_length=int(num('mom_exit_length', 100)),
-            trend_ma=int(num('trend_ma')), market_ma=int(num('market_ma')),
+            **trend_from(f.get('trend_ma')), market_ma=int(num('market_ma')),
             stop_adr_mult=num('stop_adr_mult'), trail_adr_mult=num('trail_adr_mult'),
             max_hold_days=int(num('max_hold_days')),
             rank_by='momentum',
@@ -115,7 +124,7 @@ def params_from_form(f: dict) -> StrategyParams:
         entry_mode='cross' if f.get('entry_mode') == 'cross' else 'level',
         exit_rule=f.get('exit_rule', 'osc') if f.get('exit_rule') in ('osc', 'prev_high', 'none') else 'osc',
         exit_threshold=num('exit_level', 50) + shift,
-        trend_ma=int(num('trend_ma')), market_ma=int(num('market_ma')),
+        **trend_from(f.get('trend_ma')), market_ma=int(num('market_ma')),
         stop_adr_mult=num('stop_adr_mult'), trail_adr_mult=num('trail_adr_mult'),
         max_hold_days=int(num('max_hold_days')),
         breadth_min=num('breadth_pct') / 100.0,
@@ -485,7 +494,9 @@ a { color: var(--accent); }
   <div class="grid">
     <label class="f">Stock trend filter<select name="trend_ma">
       <option value="0">No filter</option><option value="50">Above its 50-day average</option>
-      <option value="100">Above its 100-day average</option><option value="200" selected>Above its 200-day average</option></select></label>
+      <option value="100">Above its 100-day average</option><option value="200" selected>Above its 200-day average</option>
+      <option value="200:-0.10">At least 10% below its 200-day average</option><option value="200:-0.15">At least 15% below its 200-day average</option>
+      <option value="200:-0.20">At least 20% below its 200-day average</option><option value="200:-0.30">At least 30% below its 200-day average</option></select></label>
     <label class="f">Market filter (SPY)<select name="market_ma">
       <option value="0">No filter</option><option value="50">SPY above its 50-day average</option>
       <option value="200" selected>SPY above its 200-day average</option></select></label>
@@ -705,7 +716,7 @@ function loadPlan(s) {
     form.exit_rule.value = ['osc', 'prev_high', 'none'].includes(p.exit_rule) ? p.exit_rule : 'osc';
     form.rank_by.value = p.rank_by === 'volatility' ? 'volatility' : 'oversold';
   }
-  setSel('trend_ma', p.trend_ma); setSel('market_ma', p.market_ma); setSel('stop_adr_mult', p.stop_adr_mult);
+  setSel('trend_ma', p.trend_below ? `${p.trend_ma}:-${p.trend_below.toFixed(2)}` : p.trend_ma); setSel('market_ma', p.market_ma); setSel('stop_adr_mult', p.stop_adr_mult);
   setSel('trail_adr_mult', p.trail_adr_mult); setSel('max_hold_days', p.max_hold_days);
   setSel('max_positions', p.max_positions); setSel('breadth_pct', Math.round(p.breadth_min * 100));
   form.min_price.value = p.min_price; form.min_dollar_volume_m.value = p.min_dollar_volume / 1e6;
