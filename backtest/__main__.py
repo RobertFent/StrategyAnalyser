@@ -21,6 +21,11 @@ COMMANDS = [
         ('python3 -m backtest.analyze --params ... [--quick]', 'stress tests: verdict, costs, neighbors, random entries'),
         ('python3 -m backtest.tune --space default|momentum', 'search many rule sets with walk-forward validation'),
     ]),
+    ('Options', [
+        ('python3 -m backtest.spreads --fetch', 'download SPY (unadjusted) and VIX history once'),
+        ('python3 -m backtest.spreads --debit 4.95 [--offset 0.017 --width 10 --dte 60]', 'backtest a SPY bull call spread routine, scaled to the debit you pay'),
+        ('python3 -m backtest.spreads --tune', 'try 720 spread setups (strikes, width, expiry, close rule, stop, cadence, filter)'),
+    ]),
 ]
 
 if __name__ == '__main__':

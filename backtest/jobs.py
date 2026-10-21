@@ -70,6 +70,30 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
         cmd = py + ['backtest.tune', '--space', space, '--start', start, '--holdout-start', holdout,
                     '--metric', metric, '--n-iter', str(n), '--min-trades', '20']
         return cmd, f'Search {n} rule sets ({space})'
+    if kind == 'spreads_fetch':
+        return py + ['backtest.spreads', '--fetch'], 'Download SPY and VIX history'
+    if kind in ('spreads', 'spreads_tune'):
+        def num(key, lo, hi, scale=1.0):
+            v = float(opts.get(key) or 0)
+            if not (lo <= v <= hi):
+                raise ValueError(f'{key} out of range.')
+            return v * scale
+        cadence = opts.get('cadence', 'monthly')
+        if cadence not in ('monthly', 'weekly', 'next'):
+            raise ValueError('Unknown cadence.')
+        cmd = py + ['backtest.spreads', '--start', start, '--holdout-start', holdout,
+                    '--offset', f'{num("offset", -10, 10, 0.01):.4f}', '--width', f'{num("width", 1, 100):g}',
+                    '--dte', f'{int(num("dte", 7, 365))}', '--target', f'{num("target", 10, 100, 0.01):.2f}',
+                    '--stop', f'{num("stop", 0, 100, 0.01):.2f}', '--cadence', cadence,
+                    '--trend-ma', f'{int(num("trend_ma", 0, 400))}']
+        if float(opts.get('debit') or 0) > 0:
+            cmd += ['--debit', f'{num("debit", 0.01, 1000):.2f}']
+        if kind == 'spreads_tune':
+            metric = opts.get('metric', 'calmar')
+            if metric not in ('calmar', 'sharpe', 'cagr'):
+                raise ValueError('Unknown metric.')
+            return cmd + ['--tune', '--metric', metric], 'Tune SPY call spreads (720 setups)'
+        return cmd, 'Backtest SPY call spreads'
     raise ValueError('Unknown job.')
 
 
@@ -132,7 +156,7 @@ def find_result(kind: str, log_path: Path) -> dict | None:
         if (ROOT_DIR / rel / 'best_params.json').exists():
             res['best_params'] = str(rel / 'best_params.json')
         return res
-    if kind in ('fetch', 'update', 'membership', 'tests'):
+    if kind in ('fetch', 'update', 'membership', 'tests', 'spreads_fetch'):
         return {'type': 'log'}
     return None
 

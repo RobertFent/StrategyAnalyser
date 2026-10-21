@@ -18,6 +18,7 @@ backtest/
   plan.py, report.py        terminal questionnaire, HTML report
   compare.py                multi-strategy comparison page
   run.py, analyze.py, tune.py, signals.py
+  spreads.py                SPY bull call spreads: Black-Scholes marks with VIX as IV, exact payoff at expiry; --tune grid
   search_space.py           what tune searches
 strategies/                 rule sets as JSON
 tests/                      python3 tests/test_backtest.py (no network)

@@ -316,6 +316,35 @@ def test_end_to_end_runs():
     assert opened.max() <= 5
 
 
+def test_spreads_pricing_and_backtest():
+    from backtest.spreads import call_price, spread_value, _expiry, SpreadParams, backtest
+    import numpy as np, pandas as pd
+    s = np.array([100.0, 110.0, 90.0])
+    assert np.allclose(call_price(s, 100.0, np.zeros(3), np.full(3, 0.2)), [0.0, 10.0, 0.0])   # intrinsic at expiry
+    v = spread_value(s, 100.0, 110.0, np.full(3, 0.25), np.full(3, 0.2))
+    assert (v >= 0).all() and (v <= 10).all() and v[1] > v[0] > v[2]
+    assert _expiry(pd.Timestamp('2026-10-20'), 60).weekday() == 4                             # a Friday
+    rng = np.random.default_rng(1)
+    dates = pd.bdate_range('2015-01-01', periods=900)
+    close = 200 * np.exp(np.cumsum(rng.normal(0.0004, 0.01, len(dates))))
+    df = pd.DataFrame({'Date': dates, 'Close': close, 'AdjClose': close, 'VIX': 16.0})
+    p = SpreadParams(offset=0.017, width=10, dte=60, target=0.99, cadence='monthly', trend_ma=200)
+    assert p.concurrent() == 2
+    eq, tr = backtest(df, p, '2016-01-01', None, 100000)
+    assert len(tr) > 10 and (eq > 0).all() and eq.iloc[0] == 100000
+    assert tr['debit'].between(0, 10).all() and tr['exit'].between(0, 10).all()
+    assert set(tr['exit_reason']) <= {'target', 'expiry', 'stop', 'open'}
+    closed = tr[tr.exit_reason != 'open']
+    assert ((closed['exit_date'] <= closed['expiry'] + pd.Timedelta(days=3))).all()
+    # cash accounting: final equity = capital + sum of trade P&L (open ones at their mark)
+    assert abs(eq.iloc[-1] - (100000 + tr['pnl'].sum())) < 1e-6
+    # jobs build a whitelisted command for it
+    from backtest.jobs import build_command
+    argv, _ = build_command('spreads', {'offset': '1.7', 'width': '10', 'dte': '60', 'target': '99', 'debit': '4.95',
+                                        'cadence': 'monthly', 'trend_ma': '200', 'stop': '0'})
+    assert '--debit' in argv and argv[argv.index('--offset') + 1] == '0.0170'
+
+
 if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_'):

@@ -121,6 +121,28 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
   </div>
 
+  <div class="card">
+    <div class="step"><span class="n">6</span><h2>Options: SPY call spreads</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Backtests a bull call spread routine on SPY without option quotes: each spread is priced with Black-Scholes using the VIX of the day, the payoff at expiry is exact. Enter the debit you really pay and the model is scaled to it. Tune tries 720 variants (strikes, width, expiry, close rule, stop, cadence, trend filter).</span></span></div>
+    <p>Buy a call, sell a higher call, same expiry. Needs SPY and VIX history once (<i>Download SPY + VIX</i>).</p>
+    <div class="row" style="margin-bottom:8px">
+      <label class="hint">long strike <input type="number" id="spOffset" value="1.7" step="0.1" style="width:60px">% from price</label>
+      <label class="hint">width $<input type="number" id="spWidth" value="10" step="1" style="width:55px"></label>
+      <label class="hint">expiry <input type="number" id="spDte" value="60" step="1" style="width:55px"> days</label>
+      <label class="hint">close at <input type="number" id="spTarget" value="99" step="1" style="width:55px">% of width</label>
+    </div>
+    <div class="row" style="margin-bottom:8px">
+      <label class="hint">debit you pay $<input type="number" id="spDebit" value="4.95" step="0.05" style="width:65px"></label>
+      <select id="spCadence"><option value="monthly" selected>new spread monthly</option><option value="weekly">new spread weekly</option><option value="next">one at a time</option></select>
+      <select id="spTrend"><option value="200" selected>only above 200-day average</option><option value="0">always</option></select>
+      <label class="hint">stop at <input type="number" id="spStop" value="0" step="10" style="width:50px">% loss</label>
+    </div>
+    <div class="row">
+      <button class="btn" data-job="spreads">Backtest this setup</button>
+      <button class="btn ghost" data-job="spreads_tune">Tune (5–10 min)</button>
+      <button class="btn ghost" data-job="spreads_fetch">Download SPY + VIX</button>
+    </div>
+  </div>
+
   <div class="card readme">
     <div class="step"><span class="n">?</span><h2>How to read a result</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The honest numbers are the test period and the verdict. Everything else can look good by chance.</span></span></div>
     <table>
@@ -170,6 +192,10 @@ function jobOpts(btn) {
   if (kind === 'report') o.file = $('planSel').value;
   if (kind === 'analyze') { o.file = $('planSel2').value; o.quick = btn.dataset.quick === '1'; o.trials = $('trials').value; }
   if (kind === 'tune') { o.space = $('space').value; o.n_iter = $('niter').value; o.metric = $('metric').value; }
+  if (kind === 'spreads' || kind === 'spreads_tune') {
+    o.offset = $('spOffset').value; o.width = $('spWidth').value; o.dte = $('spDte').value; o.target = $('spTarget').value;
+    o.debit = $('spDebit').value; o.cadence = $('spCadence').value; o.trend_ma = $('spTrend').value; o.stop = $('spStop').value; o.metric = $('metric').value;
+  }
   return {kind, opts: o};
 }
 document.querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', async () => {

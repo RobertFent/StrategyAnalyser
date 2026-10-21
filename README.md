@@ -24,6 +24,7 @@ on Windows tick *"Add Python to PATH"* in the installer). Then:
 | 3 | **Compare all plans with SPY** | every saved rule set on one page against SPY buy & hold and SPY timing |
 | 4 | **Quick / Full** stress test | verdict and luck checks (1 min), or also neighbouring settings, costs and a random-entry test (5 min); text report |
 | 5 | **Start search** | tries hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
+| 6 | **Backtest this setup** / **Tune** | SPY bull call spreads (buy a call, sell a higher one): your strikes, width, expiry, close rule and the debit you pay; Tune tries 720 variants. Needs *Download SPY + VIX* once. |
 
 **In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). Your own rules → step 2
 Planner: write them down first, test once, don't tweak until it looks good. See results → step 3 *Report for this plan*
@@ -59,6 +60,7 @@ python3 -m backtest.report                   # step 3 (strategies/willr.json)
 python3 -m backtest.compare                  # step 3, all plans
 python3 -m backtest.analyze --params strategies/<plan>.json --quick       # step 4
 python3 -m backtest.tune --space momentum --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20   # step 5
+python3 -m backtest.spreads --debit 4.95     # step 6, SPY call spreads (--fetch once, --tune for 720 variants)
 python3 -m backtest                          # list of all commands
 ```
 Details for every step, and the math behind each button: **[docs/GUIDE.md](docs/GUIDE.md)** (section 7).

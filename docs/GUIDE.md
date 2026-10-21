@@ -210,6 +210,20 @@ Tries many rule sets and tells you how good "pick the best" really is:
    by the search; its test-period and stitched-OOS numbers are not.
 4. Constraints: at least 20 trades per window and a worst drop no deeper than 35%, otherwise the set is discarded.
 
+### Options: SPY call spreads (step 6)
+No option quotes exist for 14 years, so the tool models them: each spread is priced with Black-Scholes, using the
+VIX of the day as implied volatility, and the payoff at expiry is exact (from SPY's close; SPY unadjusted, so
+dividends hit the calls as in real life). *Debit you pay* scales the model so that your setup costs on average what
+it really costs you; everything else follows from that. Reported: the whole account (cash idle, 10% of the account
+at risk in total, split over the spreads that overlap), SPY buy & hold and SPY timing on the same dates, per-spread
+statistics (average result in % of the debit, how many closed at the target, at expiry, at the stop), the same
+routine at 2/5/10/20% at risk, and one-contract constant size: total P&L on the buying power tied up at once.
+Tune tries 720 setups (long strike −1% to +3% from the price, width 5/10/20, 30/60/90 days, close at 80% or 99% of
+the width, stop or none, monthly or weekly, trend filter or none), ranks them on the development period and shows
+the test period next to it; your own setup's rank is printed below the table. The model's weak spot is the
+early close: it assumes the spread trades at its model value, so treat a routine that lives on early closes with
+more suspicion than one that lets spreads expire.
+
 **Rank by** decides what "best" means in step 2 and 3: *Calmar* = most return per unit of worst drop (favours
 smooth equity, the default), *Sharpe* = most return per unit of daily wobble, *Return* = highest growth regardless
 of drops (tends to pick wild sets). The search also records the number of variants tried, which the stress test
