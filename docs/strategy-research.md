@@ -115,52 +115,106 @@ picture is: days that pass the trend filter (stock and SPY above their 200-day a
 So the indicator does add about +0.2% per trade *given* the filter, and the filter gives it back. Net ≈ SPY,
 and after survivorship bias, below SPY.
 
-### 5. Comparison page and the RSI(4) rule book (20 Oct, evening)
-`python3 -m backtest.compare` puts several rule sets and SPY on one page. First run on the current data
-(2016 – Oct 2026, 5 bps per side; RSI(4) variants on S&P 100 + Nasdaq-100 with today's members):
+## Update 21 October 2026: all plans on one page, deep-below RSI(4), SPY call spreads
 
-| | Return / yr | Worst drop | Sharpe | Test period return / yr | Verdict | Not luck |
-|---|---|---|---|---|---|---|
-| SPY buy & hold | 15.1% | −33.7% | 0.88 | 17.6% | – | – |
-| SPY timing | 11.4% | −20.7% | 0.97 | 11.4% | – | – |
-| Williams %R dip-buying (`willr.json`) | 7.6% | −27.4% | 0.60 | 8.0% | 2 / 7 | 5% |
-| Momentum, best of 400 (`best_strategy.json`) | 18.5% | −28.6% | 0.81 | 26.4% | 3 / 7 | 1% |
-| RSI(4) classic rule book (`rsi4_classic.json`) | 4.4% | −14.9% | 0.46 | 4.7% | 2 / 7 | 1% |
-| RSI(4) + OBE 2% entries | 1.6% | −8.7% | 0.40 | 0.4% | 2 / 7 | 0% |
-| RSI(4) + 5% adds | 7.1% | −16.3% | 0.62 | 9.9% | 2 / 7 | 3% |
-| RSI(4) + OBE + 5% adds | 1.8% | −12.8% | 0.34 | 0.5% | 2 / 7 | 0% |
+Everything below is one run on the data of 21 October 2026 (`python3 -m backtest.compare`; stock plans on
+point-in-time S&P 500 members or today's S&P 100 + Nasdaq-100, 5 bps per side; the spread plan on SPY with
+modelled option prices, see 7.3). Test period = 2025 – Oct 2026, never used to pick any rule.
 
-Notes:
-- The RSI(4) rule book (S&P 100 / Nasdaq-100, $5–$250, above the 200-day average, RSI(4) below 15, max 3 new
-  trades a day, 10 positions, prioritised by each symbol's past ROI, stop loss = entry − 4 × ADR(20)) is implemented
-  as written, **but the profit exit was not in the excerpt**. The files use a placeholder (sell when RSI(4) closes
-  back above 55). Replace it with the real rule before reading anything into these numbers.
-- OBE entries (only buy if the open is 2%+ below the signal close) cut the trades from ~1,600 to ~145 and the
-  return with them; 5% adds raise the return (7.1% vs 4.4%) with the 4 × ADR stop capping the damage of averaging down.
-- The momentum set's 18.5% / yr includes its own tuning period; its honest number is the 7.6% / yr walk-forward above.
-- The daily returns of the dip-buying and momentum rules correlate only ~0.5, so mixing them would smooth the ride,
-  but none of them earns more than SPY.
+### 7.1 The comparison
 
-### 6. The momentum plan in practice (21 Oct)
-`best_strategy.json` is the best of 400 momentum / breakout rule sets. The rules:
+| Plan | Return / yr | Worst drop | Sharpe | Test return / yr | Test drop | Trades | Win | Verdict | Not luck |
+|---|---|---|---|---|---|---|---|---|---|
+| **SPY buy & hold** | 15.1% | −33.7% | 0.88 | 17.8% | −18.8% | – | – | – | – |
+| SPY timing (above its 200-day average) | 11.4% | −20.7% | 0.98 | 11.7% | −10.2% | – | – | – | – |
+| SPY bull call spread, $4.95 on $10, 2 monthly expirations (`bcs_495.json`) | 23.8% | −22.2% | 1.44 | 25.9% | −12.6% | 101 | 75% | **7 / 7** | 93% |
+| Momentum top 30, best of 400 (`best_strategy.json`) | 18.6% | −28.6% | 0.82 | 27.2% | −38.3% | 164 | 46% | 3 / 7 | 1% |
+| Broad market pullbacks (`candidate_breadth.json`) | 9.6% | −18.7% | 0.76 | 17.1% | −16.8% | 738 | 70% | 3 / 7 | 10% |
+| RSI(4) deep below the 200-day average (`rsi4_deep.json`) | 8.6% | −30.7% | 0.65 | 14.7% | −9.9% | 724 | 66% | 3 / 7 | 4% |
+| Williams %R dip-buying, reference (`willr.json`) | 7.8% | −27.4% | 0.61 | 9.0% | −13.3% | 3,571 | 65% | 2 / 7 | 5% |
+| RSI(4) + 5% adds | 7.2% | −16.3% | 0.63 | 10.5% | −11.2% | 1,487 | 69% | 2 / 7 | 3% |
+| RSI(4) classic rule book | 4.5% | −14.9% | 0.46 | 5.1% | −11.1% | 1,583 | 65% | 2 / 7 | 1% |
+| RSI(4) + OBE 2% / 3% / 4% entries | 1.3–1.8% | −4% to −9% | 0.4–0.55 | 0.5–2.0% | −3% | 40–146 | 60–68% | 2 / 7 | 0% |
+| RSI(4) + OBE + 5% adds | 1.9% | −12.8% | 0.35 | 0.9% | −4.1% | 143 | 77% | 2 / 7 | 0% |
 
-- **Buy:** on the first trading day of each month, every S&P 500 stock that newly entered the top 30 by 6-month
-  performance (price ≥ $5, ≥ $5M traded per day). Buy at the next open, 10% of the account each, max 10 positions;
-  with more signals than free slots, take the strongest.
-- **Sell:** when the close is below the 200-day average, at the next open. No stop loss, no target.
-- In practice: one look per month, ~15 trades a year, median hold about 6 months, 46% of trades win; the few big
-  winners (STX +363%, AMD +204%, FIX +45% in 2025–26) pay for many −20…−30% losers (HOOD, LUV, DOW, SMCI).
+"Not luck" = probability that the edge over SPY buy & hold is real, after the bootstrap and the deflated Sharpe
+check (`best_strategy.json` is deflated for its 400 tried variants). All RSI(4) files still use the placeholder exit
+(RSI(4) back above 55); the rule book's real profit exit is not implemented.
 
-| | Return / yr | Worst drop | Not luck |
-|---|---|---|---|
-| 2016 – Oct 2026 incl. the years the rules were picked on | 18.5% | −28.6% | 1% |
-| Walk-forward 2019–24 (rules re-picked each year, traded the next) | 6.8% | −38% | – |
-| Test period 2025 – today (never used to pick rules) | −4.6% | −21.8% | – |
-| SPY buy & hold, same periods | 15.1% / 17.1% / 17.6% | −33.7% | – |
+### 7.2 Stock plans: the picture has not changed
 
-Verdict 3 / 7. The 18.5% is the number that made it "best", and it is the one not to trust: it was selected on
-that data. Every honest view (walk-forward, test period, luck check) is below SPY. Fit for paper trading as an
-exercise in following rules, not for real money yet.
+- **Nothing that buys and sells S&P 500 shares on indicator rules beats holding SPY.** The best of them (momentum,
+  broad pullbacks) match or beat SPY in a good year and give it all back in a reversal year; their luck checks are
+  1–10%. Every RSI(4) variant trails SPY by a wide margin in both periods.
+- **Deep below the average (new).** Buying RSI(4) < 15 only when the stock is at least 15% below its 200-day
+  average, i.e. washed-out names, is the best RSI(4) variant: 8.6% a year, 14.7% in the test period, 66% winners,
+  and it is the only RSI(4) rule that made money in 2022 (+15.6% while SPY lost 18.7%) because crashed stocks
+  bounce hardest. But the worst drop is −30.7% (March 2020: stops hit on FANG −43%, BA −32%), the stress test
+  says the edge over SPY is −6.4% a year with a 4% chance of being positive, and random entries under the same
+  filters did as well as the signal (+2.5% vs +1.7% per trade): the rebound comes from *being long beaten-down
+  stocks*, not from the RSI timing. Trades held 1–5 days are the profitable ones (+4%); holding 10–20 days loses.
+- **OBE entries** (open 2–4% below the signal close) cut the trade count to 40–146 in ten years and the return
+  with it; whatever edge the rule book has is not in the gap.
+- Conclusion for the stock side is unchanged: the 200-day trend filter does the work, the indicator does not,
+  and more searching only finds more luck. SPY timing remains the honest benchmark for anyone who wants smaller drops.
+
+### 7.3 The SPY call spread routine: the only plan that passes, and why that is not yet a result
+
+**The routine.** Every third Friday, while SPY is above its 200-day average, buy the $10-wide SPY call spread that
+costs $4.95 that day, expiring on the monthly expiration two months out. Close when it is worth $9.90 ($9.50 for
+spreads expiring in March/June/September/December, when SPY goes ex-dividend on expiration day) or let it expire.
+10% of the account at risk in total (two spreads open at once, 5% each).
+
+**The backtest** (2016 – Oct 2026, 103 spreads): 23.8% a year, worst drop −22.2%, Sharpe 1.44, 76% winners;
+test period 25.9% a year with a −12.6% drop against SPY's 17.8% / −18.8%. Per spread: average +49% of the debit,
+winners +90%, losers −80%. All seven checks pass, luck check 93%. Year by year it beat SPY in 9 of 11 years and
+lost only in 2022 (−12.7% vs −18.2%) and 2023 (+7% vs +26%).
+
+**Why it works in the model.** A $4.95 spread on a $10 width is priced as a 50/50 bet, but SPY has risen over
+about three quarters of all two-month windows that started above its 200-day average. The spread pays roughly
+1:1, so a 75% win rate turns into +49% of the debit per trade: the routine harvests the market's upward drift with
+leverage and a defined loss. That is a sound idea; holding SPY does the same without the leverage. The sizing table
+shows exactly this: 2% at risk gives 3.9% a year, 10% gives 23.8%, 20% gives 49% with a −41% drop. The return
+is a dial on the risk, not a free lunch.
+
+**Why the number is not yet a result.**
+1. **The option prices are modelled.** No fourteen years of SPY option quotes exist, so every spread is priced with
+   Black-Scholes from the VIX of the day (with the T-bill rate and SPY's dividend yield); only the payoff at expiry
+   is exact. The model has no volatility skew. In the real market calls above the price are cheaper than the model
+   thinks, so **$4.95 buys strikes a little higher than the model picks**: the midpoint sat on average 0.06% above
+   the SPY price in the model, 0.3% in the test period. Moving the strikes up by a few tenths of a percent costs
+   several points of win rate, and the whole edge is the win rate. The early close at $9.90 also assumes the
+   spread trades at model value.
+2. **Your own six months were flat** while the model says 2026 is +20%. That is the most important data point we
+   have, and it has to be reconciled before anyone trusts the backtest: either the real strikes sit higher than
+   the model's (see 1), the fills are worse, or six months is simply too short (21 trades in the whole test period;
+   a 76%-win routine has a 1-in-5 chance of a flat half year).
+3. **Fragility in the tune.** 720 variants priced the same way: 91% made money in the test period, the median
+   setup made 15% against SPY's 17.8%, and neighbouring setups (strike one notch apart) swing between +7% and
+   +61% in the test period. The family looks fine; any single number does not.
+
+**What to do with it.**
+- Paper-trade the routine exactly as written for 3–6 months and **log every fill: date, SPY price, both strikes,
+  debit paid**. Compare each fill with the strikes the model would have chosen that day (the "strikes:" line of
+  `python3 -m backtest.spreads --params strategies/bcs_495.json`). If your strikes are consistently higher, the
+  backtest is too kind and the win rate will be lower than 75%.
+- Keep the size honest: 10% of the account at risk is the backtest's −22% worst drop; 5% is −11% for 11% a year.
+- The comparison that matters for the coach is **same risk, which earns more**: at a −20% worst drop the spread
+  routine (10% at risk) backtests at 23.8% a year, SPY timing at 11.4%, SPY itself at 15.1% with −34%. If the
+  paper trades confirm the model, that is a real improvement; if they don't, the routine is a leveraged SPY
+  position with extra costs.
+
+### 7.4 Which is the best?
+
+On the numbers, the SPY call spread routine, and it is not close: it is the only plan that passes all seven
+checks, beats SPY in both periods, and survives the luck check. On the evidence, it is the only plan whose
+numbers rest on a model rather than on prices, and the one plan where real trading has so far disagreed with the
+backtest. Among the stock plans nothing beats SPY; the deep-below RSI(4) rule is the most interesting of them
+because it works in crashes, but it is a bet on rebounds, not on the indicator.
+
+Ranking for the coach: 1. SPY buy & hold as the thing to beat; 2. the spread routine, pending paper-trade
+confirmation of the fills; 3. SPY timing if smaller drops are the goal; 4. everything else as research, not as a
+plan.
 
 ## What we learned
 1. **The 200-day trend filter does most of the work.** Without it, returns halve and drawdowns double. Holding only SPY above its 200-day average gets a similar Sharpe (0.97) with no stock picking at all.
@@ -175,6 +229,7 @@ exercise in following rules, not for real money yet.
 - **No rule set found here is clearly better than SPY, and with survivorship bias removed the best ones are clearly worse.** The best ones roughly match SPY's return per unit of risk (Sharpe) and cut the drawdown by about half. They earn less in total, and in 2025–26 they also lost to the simple "SPY above its 200-day average" rule.
 - **A pure "buy the oversold dip" strategy on S&P 500 stocks has no robust edge in 2016–2026.** Its value is lower drawdown, and that comes from the trend filter.
 - **Searching more parameters or indicators won't change this.** It only produces more lucky in-sample winners.
+- **(21 Oct) The SPY call spread routine is the only plan that passes every check** (23.8% a year, −22% worst drop, 7 / 7), but its option prices are modelled and real trading has not yet confirmed it; see section 7.3 for what to verify before trusting it.
 
 ## Next steps
 1. **Test the coach's trading plan as a fixed hypothesis.** Run `python3 -m backtest.plan`, answer the questions

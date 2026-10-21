@@ -66,7 +66,7 @@ python3 -m backtest                          # list of all commands
 ```
 Details for every step, and the math behind each button: **[docs/GUIDE.md](docs/GUIDE.md)** (section 7).
 
-## Main finding (status 20 October 2026)
+## Main finding (status 21 October 2026)
 Several thousand rule sets were tested: 10 oversold indicators, momentum and breakout rules, trend and market
 filters, stops and exits. They were checked year by year on 2019–2024 and on a 2025–2026 period never used to
 choose them, with point-in-time index membership (no survivorship bias) and a check for luck.
@@ -75,12 +75,19 @@ choose them, with point-in-time index membership (no survivorship bias) and a ch
 about 7.6% a year against SPY's 15%, with similar drawdowns, and none passes the "unlikely to be luck" check.
 The 200-day trend filter does most of the work; the indicators add little.
 
+**One plan passes every check: a SPY bull call spread routine** (every third Friday, the $10-wide spread that costs $4.95, two
+monthly expirations out, only above the 200-day average). 23.8% a year with a −22% worst drop in the backtest, but the option
+prices are modelled from the VIX and six months of real trading were flat; paper-trade and log the fills before believing it
+(research doc, section 7.3).
+
 | 2016 – Oct 2026, point-in-time members, 88% of member-days with prices | Return / year | Worst drop | Verdict |
 |---|---|---|---|
 | SPY buy & hold | 15.1% | −33.7% | – |
 | SPY timing (hold SPY only above its 200-day average) | 11.4% | −20.7% | – |
 | Reference dip-buying rules (`strategies/willr.json`) | 7.6% | −27.4% | 2 of 7, luck check 5% |
 | Momentum, best of 400 (`strategies/best_strategy.json`) | 7.6% out-of-sample 2019–24 | −29.2% | luck check 0% |
+| RSI(4) rule book, best variant: deep below the 200-day average (`strategies/rsi4_deep.json`) | 8.6% | −30.7% | 3 of 7, luck check 4% |
+| **SPY bull call spread, $4.95 on $10, 2 monthly expirations (`strategies/bcs_495.json`)** | **23.8%** | **−22.2%** | **7 of 7, luck check 93%**, option prices modelled: not confirmed by real trades yet |
 
 Full results, verdicts and reasoning: **[docs/strategy-research.md](docs/strategy-research.md)**.
 Searching, stress tests and engine details: [docs/TECHNICAL.md](docs/TECHNICAL.md).
