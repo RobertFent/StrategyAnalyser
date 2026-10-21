@@ -87,13 +87,30 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
                                 hold_b['SPY buy & hold'], hold_b['SPY timing (>SMA200)'], luck)
     passed = sum(ok for _, ok, _ in verdict)
 
-    # chart data: growth of $10,000 (weekly points), drawdowns, yearly returns
-    idx = full_res.equity.index
     curves = {
         'Strategy': full_res.equity / full_res.equity.iloc[0] * 10_000,
-        'SPY buy & hold': spy_buy_hold(bench, idx, 10_000),
-        'SPY timing': spy_timing(bench, idx, cost_per_side=cost, capital=10_000),
+        'SPY buy & hold': spy_buy_hold(bench, full_res.equity.index, 10_000),
+        'SPY timing': spy_timing(bench, full_res.equity.index, cost_per_side=cost, capital=10_000),
     }
+    title = meta.get('name') or (f'Best set of {params_path.parent.name}' if params_path.stem == 'best_params'
+                                 else params_path.stem.replace('_', ' ').title())
+    return render(
+        out_stem=params_path.stem, title=title, subtitle_what=f'Backtest on {universe_label(index)}',
+        cost_text=f'costs {cost_bps:g} bps per trade side', note=note, rules=p.describe(), verdict=verdict,
+        full_m=full_m, hold_m=hold_m, tune_m=tune_m, full_b=full_b, hold_b=hold_b, tune_b=tune_b,
+        curves=curves, trades=full_res.trades, start=start, holdout_start=holdout_start, tune_end=tune_end,
+        reason_names={'signal': 'Exit signal', 'stop': 'Stop loss', 'trail': 'Trailing stop',
+                      'time': 'Time limit', 'window_end': 'Still open at the end'})
+
+
+def render(*, out_stem: str, title: str, subtitle_what: str, cost_text: str, note: str, rules: str,
+           verdict: list, full_m: dict, hold_m: dict, tune_m: dict | None, full_b: dict, hold_b: dict,
+           tune_b: dict | None, curves: dict, trades: pd.DataFrame, start: str, holdout_start: str,
+           tune_end: pd.Timestamp, reason_names: dict, stress_text: str = f'{criteria.STRESS_COST_BPS:g} bps costs') -> Path:
+    """Write the one-page HTML report from already computed results (shared by stock and option plans).
+    `curves`: {'Strategy', 'SPY buy & hold', 'SPY timing'} -> daily growth of $10,000 on the same index."""
+    passed = sum(ok for _, ok, _ in verdict)
+    idx = curves['Strategy'].index
     weekly = pd.DataFrame(curves).resample('W-FRI').last().dropna()
     dd = weekly / weekly.cummax() - 1
     yr = pd.DataFrame({k: yearly_returns(v) for k, v in curves.items()})
@@ -105,11 +122,8 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
         'yearly': {k: [round(v * 100, 2) for v in yr[k]] for k in SERIES},
         'holdout': holdout_start,
     }
-
-    t = full_res.trades
+    t = trades
     reasons = t.groupby('exit_reason')['net_return'].agg(['count', 'mean']) if len(t) else pd.DataFrame()
-    reason_names = {'signal': 'Exit signal', 'stop': 'Stop loss', 'trail': 'Trailing stop',
-                    'time': 'Time limit', 'window_end': 'Still open at the end'}
     reason_rows = ''.join(
         f'<tr><th scope="row">{reason_names.get(r, r)}</th><td>{int(row["count"])}</td><td>{_pct(row["mean"], 2)}</td></tr>'
         for r, row in reasons.iterrows())
@@ -120,19 +134,19 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
         f'<li class="{"ok" if ok else "bad"}"><span class="badge">{"✓ PASS" if ok else "✕ FAIL"}</span>'
         f'<span class="crit">{html.escape(name)}</span><span class="detail">{html.escape(detail)}</span></li>'
         for name, ok, detail in verdict)
-    rules = html.escape(p.describe())
-    title = meta.get('name') or (f'Best set of {params_path.parent.name}' if params_path.stem == 'best_params'
-                                 else params_path.stem.replace('_', ' ').title())
     period = f'{idx[0].date():%d %b %Y} – {idx[-1].date():%d %b %Y}'
     headline_ok = passed == len(verdict)
+    has_dev = tune_m is not None
+    exposure = full_m.get('exposure')
+    exposure_txt = _pct(exposure, 0) if exposure is not None and exposure == exposure else '–'
 
     page = TEMPLATE
     for key, val in {
         '{{TITLE}}': html.escape(title),
         '{{PERIOD}}': period,
-        '{{UNIVERSE}}': universe_label(index),
+        '{{WHAT}}': html.escape(subtitle_what), '{{COST_TEXT}}': html.escape(cost_text),
         '{{NOTE}}': f'<p class="note">{html.escape(note)}</p>' if note else '',
-        '{{RULES}}': rules,
+        '{{RULES}}': html.escape(rules),
         '{{VERDICT_CLASS}}': 'ok' if headline_ok else 'bad',
         '{{VERDICT_HEAD}}': (f'{passed} of {len(verdict)} checks passed – '
                              + ('worth paper trading' if headline_ok else 'not good enough to trade')),
@@ -149,15 +163,15 @@ def build(params_path: Path, index: str | None, start: str, holdout_start: str, 
         '{{YEARLY_ROWS}}': yearly_rows,
         '{{REASON_ROWS}}': reason_rows,
         '{{AVG_TRADE}}': _pct(full_m['avg_trade'], 2), '{{AVG_WIN}}': _pct(full_m['avg_win'], 2),
-        '{{AVG_LOSS}}': _pct(full_m['avg_loss'], 2), '{{EXPOSURE}}': _pct(full_m['exposure'], 0),
-        '{{COST}}': f'{cost_bps:g}', '{{STRESS}}': f'{criteria.STRESS_COST_BPS:g}',
+        '{{AVG_LOSS}}': _pct(full_m['avg_loss'], 2), '{{EXPOSURE}}': exposure_txt,
+        '{{STRESS}}': html.escape(stress_text),
         '{{DATA}}': json.dumps(data),
         '{{GENERATED}}': f'{datetime.now():%d %b %Y %H:%M}',
     }.items():
         page = page.replace(key, val)
 
     OUTPUT_DIR.mkdir(exist_ok=True)
-    out = OUTPUT_DIR / f'report_{params_path.stem}_{datetime.now():%Y%m%d_%H%M%S}.html'
+    out = OUTPUT_DIR / f'report_{out_stem}_{datetime.now():%Y%m%d_%H%M%S}.html'
     out.write_text(page, encoding='utf-8')
     return out
 
@@ -268,7 +282,7 @@ footer { color: var(--text-3); font-size: 13px; margin-top: 18px; text-align: ce
 <header>
   <a id="back" href="/" style="display:none;color:var(--s1);font-size:14px;text-decoration:none">&larr; Back to the planner</a>
   <h1>{{TITLE}}</h1>
-  <p class="sub">Backtest on {{UNIVERSE}} · {{PERIOD}} · costs {{COST}} bps per trade side</p>
+  <p class="sub">{{WHAT}} · {{PERIOD}} · {{COST_TEXT}}</p>
 </header>
 {{NOTE}}
 
@@ -341,7 +355,7 @@ footer { color: var(--text-3); font-size: 13px; margin-top: 18px; text-align: ce
     <dt>SPY timing</dt><dd>Simple benchmark: hold the S&amp;P 500 ETF only while it is above its 200-day average, otherwise cash. If a strategy can't beat this, its stock picking adds nothing.</dd>
     <dt>Development period</dt><dd>The years used to find the rules. Results here always look good.</dd>
     <dt>Test period</dt><dd>Data the rules have never seen. This is the honest number.</dd>
-    <dt>Verdict</dt><dd>Seven checks agreed on before testing (strong enough vs SPY, holds up in the test period, survives {{STRESS}} bps costs, smaller drops than SPY, unlikely to be luck). All must pass before paper trading.</dd>
+    <dt>Verdict</dt><dd>Seven checks agreed on before testing (strong enough vs SPY, holds up in the test period, survives {{STRESS}}, smaller drops than SPY, unlikely to be luck). All must pass before paper trading.</dd>
     <dt>Unlikely to be luck</dt><dd>Probability that the edge over SPY is real, from the day-to-day ups and downs of the difference between the strategy and SPY. Below 90% the result is within what chance alone produces. If many variants were tried before this one, the bar rises (a lucky best-of-100 looks impressive by itself).</dd>
   </dl>
 </section>

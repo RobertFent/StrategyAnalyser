@@ -400,17 +400,33 @@ def run_one(path, start: str, holdout_start: str, capital: float = 100000.0) -> 
 
 
 def build_report(path, start: str, holdout_start: str, capital: float = 100000.0) -> Path:
-    """HTML report for an option plan: verdict, chart, text report. Saved like the other reports."""
-    from backtest.criteria import format_verdict
-    path = Path(path); p = SpreadParams.load(path); df = load()
-    lines, res = report(df, p, start, holdout_start, capital)
+    """The same one-page HTML report as backtest.report, for an option plan."""
+    from backtest.report import render
+    from backtest.benchmarks import benchmark_metrics, spy_buy_hold, spy_timing
+    path = Path(path); p = SpreadParams.load(path); meta = json.loads(path.read_text()); df = load()
     r = run_one(path, start, holdout_start, capital)
-    lines = [f'VERDICT ({r["passed"]}/{r["checks"]} checks passed)'] + format_verdict(r['verdict']) + [''] + lines
-    text = '\n'.join(lines)
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    out = OUTPUT_DIR / f'report_{path.stem}_{datetime.now():%Y%m%d_%H%M%S}.html'
-    out.write_text(_html(text, res['equity'], df, holdout_start, title=r['name']))
-    return out
+    eq, tr = r['equity'], r['trades']
+    closed = tr[tr.exit_reason != 'open'] if len(tr) else tr
+    tune_end = pd.Timestamp(holdout_start) - pd.Timedelta(days=1)
+    dev = eq[eq.index <= tune_end]
+    has_dev = tune_end > pd.Timestamp(start) + pd.Timedelta(days=60) and len(dev) > 30
+    tune_m = compute_metrics(dev / dev.iloc[0] * capital, closed[closed.exit_date <= tune_end] if len(closed) else closed) if has_dev else None
+    bench = df[['Date', 'AdjClose']].rename(columns={'AdjClose': 'Close'})
+    tune_b = benchmark_metrics(bench, dev.index) if has_dev else None
+    full_b = benchmark_metrics(bench, eq.index)
+    hold_b = benchmark_metrics(bench, eq.index[eq.index >= pd.Timestamp(holdout_start)])
+    curves = {'Strategy': eq / eq.iloc[0] * 10_000, 'SPY buy & hold': spy_buy_hold(bench, eq.index, 10_000),
+              'SPY timing': spy_timing(bench, eq.index, capital=10_000)}
+    for m in (r['full'], r['holdout'], tune_m or {}):
+        m['exposure'] = float('nan')
+    return render(
+        out_stem=path.stem, title=r['name'], subtitle_what='Backtest on SPY options (Black-Scholes marks from the VIX, exact payoff at expiry)',
+        cost_text=f'${p.slip:.2f} slippage per side, ${p.commission:.2f} commission per contract and leg, {p.risk * 100:.0f}% of the account at risk',
+        note=meta.get('note', ''), rules=p.describe(), verdict=r['verdict'],
+        full_m=r['full'], hold_m=r['holdout'], tune_m=tune_m, full_b=full_b, hold_b=hold_b, tune_b=tune_b,
+        curves=curves, trades=closed, start=start, holdout_start=holdout_start, tune_end=tune_end,
+        reason_names={'target': 'Closed at the target', 'expiry': 'Expired', 'stop': 'Stop', 'open': 'Still open'},
+        stress_text='double slippage and commissions')
 
 
 def _html(text: str, eq: pd.Series, df: pd.DataFrame, holdout: str, title: str = 'SPY call spreads') -> str:
@@ -502,10 +518,13 @@ def main() -> None:
     if a.fetch:
         df = fetch(); print(f'Saved {UNDERLYING}: {df.Date.iloc[0].date()} .. {df.Date.iloc[-1].date()}, {len(df)} days'); return
     if a.params:
+        from backtest.criteria import format_verdict
+        r = run_one(a.params, a.start, a.holdout_start, a.capital)
+        print('\n'.join([f'VERDICT ({r["passed"]}/{r["checks"]} checks passed)'] + format_verdict(r['verdict'])))
+        lines, _ = report(load(), SpreadParams.load(a.params), a.start, a.holdout_start, a.capital)
+        print('\n' + '\n'.join(lines))
         out = build_report(a.params, a.start, a.holdout_start, a.capital)
-        import html as _hh
-        print(_hh.unescape(Path(out).read_text().split('<pre')[1].split('>', 1)[1].split('</pre>')[0]))
-        print(f'Report saved: {out}')
+        print(f'\nReport saved: {out}')
         return
     df = load()
     p = SpreadParams(**{f: getattr(a, f) for f in asdict(SpreadParams())})
