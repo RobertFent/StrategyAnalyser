@@ -215,6 +215,48 @@ because it works in crashes, but it is a bet on rebounds, not on the indicator.
 Ranking for the coach: 1. SPY buy & hold as the thing to beat; 2. the spread routine, pending paper-trade
 confirmation of the fills; 3. SPY timing if smaller drops are the goal; 4. everything else as research, not as a
 plan.
+The spread variants found by the tune (7.5) rank with the routine: more return in the model, more dependence on the model.
+
+### 7.5 Other SPY call spread variants (from the 720-setup tune)
+
+The tune (`python3 -m backtest.spreads --tune`) tried strikes by debit (40 / 50 / 60% of the width) or at a fixed
+distance, widths 5 / 10 / 20, 30 / 60 / 90 days, close at 80 or 99% of the width, 50% stop or none, monthly
+(third Friday) or weekly entries, with and without the 200-day filter. 91% of the 720 setups made money in the test
+period; the median made 15% a year against SPY's 17.8%. Three families from the top of the table are saved as plans
+and run on the same data as your routine:
+
+| Plan | Return / yr | Worst drop | Sharpe | Win | Trades | Test return / yr | Test drop | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| **Yours**: $4.95 on $10, 2 months, 99%, above 200-day (`bcs_495.json`) | 23.8% | −22.2% | 1.44 | 76% | 103 | 25.9% | −12.6% | 7 / 7 |
+| In the money: $6.00 on $10, 1 month, 99%, 50% stop, no filter (`bcs_itm30.json`) | 46.2% | −19.0% | 2.02 | 77% | 130 | 75.1% | −12.4% | 7 / 7 |
+| Weekly ladder: $5.00 on $10 every week, 1 month, 99%, 50% stop, no filter (`bcs_weekly.json`) | 35.7% | −19.7% | 1.74 | 62% | 564 | 30.6% | −17.6% | 7 / 7 |
+| Smooth: $6.00 on $10, 2 months, take profit at 80%, 50% stop, above 200-day (`bcs_smooth.json`) | 14.2% | −8.0% | 1.66 | 87% | 103 | 11.6% | −8.0% | 5 / 7 |
+| SPY buy & hold | 15.1% | −33.7% | 0.88 | | | 17.8% | −18.8% | |
+
+What the tune says, read with the caveats of 7.3 in mind:
+
+- **The direction is consistent, the sizes are not.** Shorter spreads (one month instead of two), strikes below the
+  price (pay $6 instead of $4.95: the bet is "SPY does not fall 1–1.5%" rather than "SPY rises"), a 50% stop and
+  no trend filter all raise the model's return; each is a step towards selling insurance on a rising market. The
+  in-the-money variant's 75% a year in the test period is the model enjoying 2025–26; its development-period 41%
+  is the number to argue about, and even that is the best of 720.
+- **The stop is the most model-dependent piece.** Every top row has the 50% stop, which turns −100% losers into
+  −55…−60% ones (24 of the in-the-money plan's 130 trades were stopped). A stop fires on the *modelled* mark of a
+  spread in the middle of a sell-off, when real quotes are widest and skew is steepest. Your routine, held to expiry,
+  depends on the model only for the strikes; the smooth variant depends on it for both exits and its results should
+  be taken as the least reliable of the four despite the best-looking drawdown.
+- **The weekly ladder is the most robust evidence.** 564 trades instead of 103, four to five spreads open at once,
+  62% winners paying about 1.5:1, 36% a year in the development period and 31% in the test period with no cliff
+  between them. It is also the hardest to trade by hand (a new spread every week, four open positions, a stop to
+  watch) and the most sensitive to costs: at four times the trades, slippage is four times the drag.
+- **Your routine is in the middle of the pack by Calmar (rank 424 of 688) and near the top by test-period return.**
+  That is what a setup that was *not* found by searching should look like. The variants above were found by
+  searching 720 combinations and are flattered accordingly.
+
+**If one variant is worth paper trading next to yours, it is the one-month in-the-money spread without the stop**
+(`debit:0.6, $10, 30 days, 99%, expiry, no filter`: 41% a year, −21% drop in the development period, 61% in the
+test period, held to expiry so the model only picks the strikes). Log the fills for both routines the same way; the
+gap between model and market will show up in the debit you actually pay for the model's strikes.
 
 ## What we learned
 1. **The 200-day trend filter does most of the work.** Without it, returns halve and drawdowns double. Holding only SPY above its 200-day average gets a similar Sharpe (0.97) with no stock picking at all.
