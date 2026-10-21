@@ -132,7 +132,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
     <div class="row" style="margin-bottom:8px">
       <label class="hint">debit you pay $<input type="number" id="spDebit" value="4.95" step="0.05" style="width:65px"></label>
-      <select id="spCadence"><option value="monthly" selected>new spread monthly</option><option value="weekly">new spread weekly</option><option value="next">one at a time</option></select>
+      <select id="spCadence"><option value="expiry" selected>every third Friday (monthly expiration)</option><option value="monthly">first trading day of the month</option><option value="weekly">new spread weekly</option><option value="next">one at a time</option></select>
       <select id="spTrend"><option value="200" selected>only above 200-day average</option><option value="0">always</option></select>
       <label class="hint">stop at <input type="number" id="spStop" value="0" step="10" style="width:50px">% loss</label>
     </div>

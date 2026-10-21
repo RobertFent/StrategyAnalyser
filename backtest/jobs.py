@@ -78,8 +78,8 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
             if not (lo <= v <= hi):
                 raise ValueError(f'{key} out of range.')
             return v * scale
-        cadence = opts.get('cadence', 'monthly')
-        if cadence not in ('monthly', 'weekly', 'next'):
+        cadence = opts.get('cadence', 'expiry')
+        if cadence not in ('expiry', 'monthly', 'weekly', 'next'):
             raise ValueError('Unknown cadence.')
         cmd = py + ['backtest.spreads', '--start', start, '--holdout-start', holdout,
                     '--offset', f'{num("offset", -10, 10, 0.01):.4f}', '--width', f'{num("width", 1, 100):g}',

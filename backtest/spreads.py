@@ -91,32 +91,45 @@ class SpreadParams:
     dte: int = 60              # calendar days to expiry (nearest Friday)
     target: float = 0.99       # close when the spread is worth target * width (9.90 on a 10-wide)
     stop: float = 0.0          # close when the spread lost this share of the debit (0 = never)
-    cadence: str = 'monthly'   # monthly | weekly | next (the day after the last one closed)
+    cadence: str = 'expiry'    # expiry (third Friday, when the old one expires) | monthly (1st day) | weekly | next
     trend_ma: int = 200        # open only when SPY > its N-day average (0 = always)
     risk: float = 0.10         # share of the account at risk across all open spreads (split by how many overlap)
     iv_mult: float = 1.0       # implied vol = VIX/100 * iv_mult
     slip: float = 0.05         # dollars per spread per side
     commission: float = 0.65   # dollars per contract per leg per side
     rate: float = 0.0
+    fixed_debit: float = 0.0   # if > 0: pay exactly this for the spread, whatever the model says (strikes stay yours)
 
     def concurrent(self) -> int:
         """How many spreads are normally open at once (expiry / cadence)."""
-        step = {'monthly': 30, 'weekly': 7}.get(self.cadence)
+        step = {'expiry': 30, 'monthly': 30, 'weekly': 7}.get(self.cadence)
         return max(1, math.ceil(self.dte / step)) if step else 1
 
     def describe(self) -> str:
         where = ('out of the money' if self.offset > 0 else 'in the money' if self.offset < 0 else 'at the money')
-        cad = {'monthly': 'first trading day of each month', 'weekly': 'first trading day of each week',
-               'next': 'the day after the previous one closed'}[self.cadence]
+        cad = {'expiry': 'the third Friday of each month (monthly expiration day)', 'monthly': 'first trading day of each month',
+               'weekly': 'first trading day of each week', 'next': 'the day after the previous one closed'}[self.cadence]
         lines = [f'OPEN on {cad}' + (f', only while SPY is above its {self.trend_ma}-day average' if self.trend_ma else '') + ':',
                  f'  buy the SPY call {self.offset * 100:+.1f}% from the price ({where}), sell the call ${self.width:g} higher, '
-                 f'expiring in about {self.dte} days',
+                 + (f'expiring on the monthly expiration about {self.dte} days out' if self.cadence == 'expiry' else f'expiring in about {self.dte} days')
+                 + (f'; you pay ${self.fixed_debit:.2f} for it' if self.fixed_debit else ''),
                  f'CLOSE when the spread is worth {self.target * 100:.0f}% of its width (${self.target * self.width:.2f} on a ${self.width:g}-wide)'
                  + (f', when it has lost {self.stop * 100:.0f}% of the debit' if self.stop else '') + ', or at expiry',
                  f'SIZE: {self.risk * 100:.0f}% of the account at risk in total, about {self.concurrent()} spread(s) open at once '
                  f'({self.risk / self.concurrent() * 100:.1f}% each); ${self.slip:.2f} slippage per side, '
                  f'${self.commission:.2f} commission per contract and leg']
         return '\n'.join(lines)
+
+
+def third_friday(year: int, month: int) -> pd.Timestamp:
+    first = pd.Timestamp(year=year, month=month, day=1)
+    return first + pd.Timedelta(days=(4 - first.weekday()) % 7 + 14)
+
+
+def _expiry_third_friday(d: pd.Timestamp, dte: int) -> pd.Timestamp:
+    months = max(1, round(dte / 30))
+    m = d.month - 1 + months
+    return third_friday(d.year + m // 12, m % 12 + 1)
 
 
 def _expiry(d: pd.Timestamp, dte: int) -> pd.Timestamp:
@@ -132,7 +145,15 @@ def backtest(df: pd.DataFrame, p: SpreadParams, start: str, end: str | None = No
     full = df.set_index('Date')['Close']
     ma = full.rolling(p.trend_ma, min_periods=p.trend_ma).mean() if p.trend_ma else None
     dates = d['Date']
-    if p.cadence == 'monthly':
+    if p.cadence == 'expiry':      # third Friday of each month, or the last trading day before it
+        tf = {third_friday(y, m) for y in range(dates.iloc[0].year, dates.iloc[-1].year + 1) for m in range(1, 13)}
+        dnp = dates.to_numpy()
+        sched = np.zeros(len(d), bool)
+        for f in tf:
+            k = int(np.searchsorted(dnp, np.datetime64(f), side='right')) - 1
+            if 0 <= k < len(d) and (f - dates.iloc[k]).days <= 3:
+                sched[k] = True
+    elif p.cadence == 'monthly':
         sched = dates.dt.to_period('M').ne(dates.dt.to_period('M').shift(1)).fillna(True).to_numpy().astype(bool)
     elif p.cadence == 'weekly':
         wk = dates.dt.isocalendar().week.astype(int)
@@ -149,7 +170,7 @@ def backtest(df: pd.DataFrame, p: SpreadParams, start: str, end: str | None = No
         if not (sched[i] and trend_ok[i]) or np.isnan(iv[i]):
             i += 1; continue
         day = dates.iloc[i]
-        expiry = _expiry(day, p.dte)
+        expiry = _expiry_third_friday(day, p.dte) if p.cadence == 'expiry' else _expiry(day, p.dte)
         if expiry <= all_dates[-1]:
             expiry = all_dates[all_dates <= expiry][-1]
         j_end = int(np.searchsorted(dates.to_numpy(), np.datetime64(expiry), side='right'))   # exclusive
@@ -159,7 +180,11 @@ def backtest(df: pd.DataFrame, p: SpreadParams, start: str, end: str | None = No
         if expiry > all_dates[-1]:
             t_years = np.maximum(t_years, 1 / 365)
         marks = spread_value(close[i:j_end], k1, k2, t_years, iv[i:j_end], p.rate)
-        debit = float(marks[0]) + p.slip
+        debit = p.fixed_debit if p.fixed_debit else float(marks[0]) + p.slip
+        if p.fixed_debit:
+            # what you paid above the model fades out linearly towards expiry: day 0 = your price, expiry = exact payoff
+            fade = t_years / t_years[0] if t_years[0] > 0 else np.zeros_like(t_years)
+            marks = np.clip(marks + (p.fixed_debit - float(marks[0])) * fade, 0.0, p.width)
         hit_t = np.where(marks[1:] >= p.target * p.width)[0]
         hit_s = np.where(marks[1:] <= debit * (1 - p.stop))[0] if p.stop else np.array([], int)
         j_close = j_end - 1; reason = 'expiry' if expiry <= all_dates[-1] else 'open'
@@ -218,17 +243,31 @@ def _max_buying_power(tr: pd.DataFrame) -> float:
     return best
 
 
-def calibrate_iv(df: pd.DataFrame, p: SpreadParams, start: str, debit: float) -> float:
-    """Find iv_mult so that the average entry debit of the setup matches `debit` (what you actually pay)."""
-    lo, hi = 0.3, 3.0
-    for _ in range(18):
-        mid = (lo + hi) / 2
-        _, tr = backtest(df, SpreadParams(**{**asdict(p), 'iv_mult': mid}), start)
-        if len(tr) == 0 or tr['debit'].mean() < debit:
-            lo = mid
-        else:
-            hi = mid
-    return round((lo + hi) / 2, 3)
+def _avg_debit(df, p, start) -> float:
+    _, tr = backtest(df, p, start)
+    return float(tr['debit'].mean()) if len(tr) else 0.0
+
+
+def calibrate(df: pd.DataFrame, p: SpreadParams, start: str, debit: float) -> tuple[SpreadParams, str]:
+    """Match the model to the debit you really pay. First scales the implied vol (VIX x 0.7 .. 1.6); if that
+    cannot reach the debit, keeps VIX x 1.0 and moves the long strike instead (the strikes that cost `debit`)."""
+    lo, hi = 0.7, 1.6
+    if _avg_debit(df, SpreadParams(**{**asdict(p), 'iv_mult': lo}), start) <= debit <= _avg_debit(df, SpreadParams(**{**asdict(p), 'iv_mult': hi}), start):
+        for _ in range(14):
+            mid = (lo + hi) / 2
+            if _avg_debit(df, SpreadParams(**{**asdict(p), 'iv_mult': mid}), start) < debit:
+                lo = mid
+            else:
+                hi = mid
+        q = SpreadParams(**{**asdict(p), 'iv_mult': round((lo + hi) / 2, 3)})
+        return q, f'Calibrated: implied vol = VIX x {q.iv_mult} gives an average debit of ${debit:.2f} for this setup'
+    base = SpreadParams(**{**asdict(p), 'iv_mult': 1.0})
+    model = _avg_debit(df, base, start)
+    q = SpreadParams(**{**asdict(base), 'fixed_debit': debit})
+    return q, (f'NOTE: with the VIX as implied vol, a spread {p.offset * 100:+.1f}% from the price costs about ${model:.2f} in the model, '
+               f'not ${debit:.2f}, and no plausible volatility gets there. The backtest therefore pays exactly ${debit:.2f} per spread '
+               f'(your strikes, your price; marks scaled accordingly, payoff at expiry exact). If your fills are really ${debit:.2f}, '
+               f'you are paying about ${debit - model:.2f} more than the model thinks fair - check whether your strikes sit closer to the money.')
 
 
 def report(df: pd.DataFrame, p: SpreadParams, start: str, holdout: str, capital: float = 100000.0) -> tuple[list[str], dict]:
@@ -284,18 +323,58 @@ def report(df: pd.DataFrame, p: SpreadParams, start: str, holdout: str, capital:
     return lines, {'equity': eq, 'trades': tr, 'metrics': out}
 
 
+def _html(text: str, eq: pd.Series, df: pd.DataFrame, holdout: str) -> str:
+    """Self-contained page: growth of the account vs SPY (log scale) above the text report."""
+    import html as _h
+    spy = df.set_index('Date')['AdjClose'].reindex(eq.index).ffill()
+    spy = spy / spy.iloc[0] * eq.iloc[0]
+    W, H, L, R, T, B = 900, 360, 70, 20, 20, 40
+    lo = min(eq.min(), spy.min()) * 0.95; hi = max(eq.max(), spy.max()) * 1.05
+    n = len(eq)
+    x = lambda i: L + (W - L - R) * i / max(n - 1, 1)
+    y = lambda v: T + (H - T - B) * (1 - (np.log(v) - np.log(lo)) / (np.log(hi) - np.log(lo)))
+    def path(s):
+        return 'M' + ' L'.join(f'{x(i):.1f},{y(v):.1f}' for i, v in enumerate(s.to_numpy()))
+    parts = []
+    hi_idx = int(np.searchsorted(eq.index.to_numpy(), np.datetime64(pd.Timestamp(holdout))))
+    if 0 < hi_idx < n:
+        parts.append(f'<rect x="{x(hi_idx):.1f}" y="{T}" width="{x(n - 1) - x(hi_idx):.1f}" height="{H - T - B}" fill="#2a78d6" opacity="0.07"/>')
+        parts.append(f'<text x="{x(hi_idx) + 6:.1f}" y="{T + 14}" fill="#52514e" font-size="12">test period</text>')
+    for v in sorted({eq.iloc[0] * m for m in (0.5, 1, 2, 4, 8) if lo <= eq.iloc[0] * m <= hi}):
+        parts.append(f'<line x1="{L}" x2="{W - R}" y1="{y(v):.1f}" y2="{y(v):.1f}" stroke="#e3e2dd"/>'
+                     f'<text x="{L - 8}" y="{y(v) + 4:.1f}" text-anchor="end" font-size="12" fill="#52514e">${v:,.0f}</text>')
+    years = eq.index.year
+    for yr in sorted(set(years)):
+        i = int(np.argmax(years == yr))
+        parts.append(f'<text x="{x(i):.1f}" y="{H - 10}" text-anchor="middle" font-size="12" fill="#52514e">{yr}</text>')
+    parts.append(f'<path d="{path(spy)}" fill="none" stroke="#7a7974" stroke-width="2"/>')
+    parts.append(f'<path d="{path(eq)}" fill="none" stroke="#2a78d6" stroke-width="2.2"/>')
+    parts.append(f'<text x="{W - R}" y="{y(spy.iloc[-1]) + 4:.1f}" text-anchor="end" font-size="12" fill="#7a7974">SPY</text>')
+    parts.append(f'<text x="{W - R}" y="{y(eq.iloc[-1]) - 8:.1f}" text-anchor="end" font-size="12" fill="#2a78d6" font-weight="600">Call spreads</text>')
+    svg = f'<svg viewBox="0 0 {W} {H}" style="width:100%;max-width:960px;display:block">' + ''.join(parts) + '</svg>'
+    return ('<!doctype html><meta charset="utf-8"><title>SPY call spreads</title>'
+            '<body style="margin:0;background:#f4f3f0;color:#0b0b0b;font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
+            '<main style="max-width:1000px;margin:0 auto;padding:28px 16px">'
+            '<h1 style="font-size:24px;margin:0 0 4px">SPY call spreads</h1>'
+            '<p style="color:#52514e;margin:0 0 16px">Growth of the account vs SPY buy &amp; hold, log scale. Shaded: test period.</p>'
+            f'<div style="background:#fcfcfb;border:1px solid #e3e2dd;border-radius:14px;padding:16px">{svg}</div>'
+            f'<pre style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;background:#fcfcfb;border:1px solid #e3e2dd;border-radius:14px;padding:16px;margin-top:18px">{_h.escape(text)}</pre>'
+            '</main></body>')
+
+
 GRID = {
     'offset': [-0.01, 0.0, 0.01, 0.017, 0.03],
     'width': [5.0, 10.0, 20.0],
     'dte': [30, 60, 90],
     'target': [0.8, 0.99],
     'stop': [0.0, 0.5],
-    'cadence': ['monthly', 'weekly'],
+    'cadence': ['expiry', 'weekly'],
     'trend_ma': [0, 200],
 }
 
 
 def tune(df: pd.DataFrame, base: SpreadParams, start: str, holdout: str, metric: str = 'calmar') -> pd.DataFrame:
+    base = SpreadParams(**{**asdict(base), 'fixed_debit': 0.0})   # every setup at model prices (a fixed debit only fits one setup)
     rows = []
     keys = list(GRID)
     combos = list(itertools.product(*GRID.values()))
@@ -332,26 +411,28 @@ def main() -> None:
         df = fetch(); print(f'Saved {UNDERLYING}: {df.Date.iloc[0].date()} .. {df.Date.iloc[-1].date()}, {len(df)} days'); return
     df = load()
     p = SpreadParams(**{f: getattr(a, f) for f in asdict(SpreadParams())})
+    note = ''
     if a.debit:
-        p.iv_mult = calibrate_iv(df, p, a.start, a.debit)
-        print(f'Calibrated: implied vol = VIX x {p.iv_mult} gives an average debit of ${a.debit:.2f} for this setup')
+        p, note = calibrate(df, p, a.start, a.debit)
+        print(note)
     out_dir = OUTPUT_DIR / f'spreads_{datetime.now():%Y%m%d_%H%M%S}'
     out_dir.mkdir(parents=True, exist_ok=True)
     if a.tune:
         print(f'Tuning {int(np.prod([len(v) for v in GRID.values()]))} setups on {a.start}..{a.holdout_start}, ranked by {a.metric} (development period)')
         res = tune(df, p, a.start, a.holdout_start, a.metric)
         res.to_csv(out_dir / 'leaderboard.csv', index=False)
-        lines = ['SPY CALL SPREADS - TUNING', f'Development {a.start}..{a.holdout_start}, test period {a.holdout_start}..today. '
+        lines = ['SPY CALL SPREADS - TUNING', f'All setups priced by the model (VIX x {p.iv_mult} as implied vol, plus slippage); '
+                 f'development {a.start}..{a.holdout_start}, test period {a.holdout_start}..today. '
                  'Development numbers are in-sample (the best of many); trust the test period and the spread of results more than the top row.', '',
                  'Top 15 by development ' + a.metric + ':']
         show = res.head(15).copy()
         for c in ('dev_cagr', 'dev_dd', 'win', 'hold_cagr', 'hold_dd'):
             show[c] = (show[c] * 100).round(1)
         lines += ['  ' + l for l in show.round(2).to_string(index=False).split('\n')]
-        yours = res[(res.offset == 0.017) & (res.width == 10) & (res.dte == 60) & (res.target == 0.99) & (res.stop == 0) & (res.cadence == 'monthly') & (res.trend_ma == 200)]
+        yours = res[(res.offset == 0.017) & (res.width == 10) & (res.dte == 60) & (res.target == 0.99) & (res.stop == 0) & (res.cadence == 'expiry') & (res.trend_ma == 200)]
         if len(yours):
             r = yours.iloc[0]; rank = int((res['dev_' + a.metric] > r['dev_' + a.metric]).sum()) + 1
-            lines += ['', f'Your setup (OTM +1.7%, $10 wide, 60 days, close at 99%, monthly, SPY > 200 MA): rank {rank} of {len(res)}, '
+            lines += ['', f'Your setup (OTM +1.7%, $10 wide, 2 monthly expirations, close at 99%, every third Friday, SPY > 200 MA): rank {rank} of {len(res)}, '
                           f'development {r.dev_cagr * 100:.1f}%/yr, test period {r.hold_cagr * 100:.1f}%/yr']
         lines += ['', 'Share of setups that made money in the test period: '
                   f'{(res.hold_cagr > 0).mean() * 100:.0f}%; median test-period return {res.hold_cagr.median() * 100:.1f}%/yr']
@@ -362,9 +443,15 @@ def main() -> None:
         res['trades'].to_csv(out_dir / 'trades.csv', index=False)
         res['equity'].to_csv(out_dir / 'equity.csv')
         lines = ['SPY CALL SPREADS - BACKTEST (Black-Scholes marks with VIX as implied vol; payoff at expiry exact)', ''] + lines
+    if note:
+        lines.insert(2, note); lines.insert(3, '')
     text = '\n'.join(lines)
     (out_dir / 'report.txt').write_text(text)
     print(text); print(f'\nSaved to {out_dir}')
+    if not a.tune:
+        html_path = out_dir / 'report.html'
+        html_path.write_text(_html(text, res['equity'], df, a.holdout_start))
+        print(f'Report saved: {html_path}')
 
 
 if __name__ == '__main__':
