@@ -61,7 +61,7 @@ python3 -m backtest.analyze --params strategies/<plan>.json --quick       # step
 python3 -m backtest.tune --space momentum --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20   # step 5
 python3 -m backtest                          # list of all commands
 ```
-Details for every step: **[docs/GUIDE.md](docs/GUIDE.md)**.
+Details for every step, and the math behind each button: **[docs/GUIDE.md](docs/GUIDE.md)** (section 7).
 
 ## Main finding (status 20 October 2026)
 Several thousand rule sets were tested: 10 oversold indicators, momentum and breakout rules, trend and market

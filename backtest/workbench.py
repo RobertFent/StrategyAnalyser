@@ -116,7 +116,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     <div class="row">
       <select id="space"><option value="default">Oversold indicators (default)</option><option value="momentum">Momentum / breakouts</option><option value="indicators">More indicators</option><option value="breadth">Broad pullbacks</option><option value="exits">Exit variants</option></select>
       <select id="niter"><option value="200">200 rule sets</option><option value="400" selected>400 rule sets</option><option value="800">800 rule sets</option></select>
-      <select id="metric"><option value="calmar" selected>rank by Calmar</option><option value="sharpe">rank by Sharpe</option><option value="cagr">rank by return</option></select>
+      <select id="metric" title="What counts as best: Calmar = return per unit of worst drop (smooth), Sharpe = return per unit of daily wobble, return = growth regardless of drops"><option value="calmar" selected>rank by Calmar</option><option value="sharpe">rank by Sharpe</option><option value="cagr">rank by return</option></select>
       <button class="btn" data-job="tune">Start search</button>
     </div>
   </div>

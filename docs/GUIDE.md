@@ -142,3 +142,75 @@ python3 -m backtest.compare
   signal at the close.
 - **Questions or problems:** ask Robert. Error messages in the Terminal usually say what is missing, for
   example "Run python3 -m backtest.fetch first".
+
+---
+
+## 7. What happens behind each button
+
+All steps share one engine: for every stock and every day the rules say *buy* or *sell*, a signal at the close is
+executed at the next day's open, 0.05% cost per buy and per sell, 10% of the account per position, cash earns nothing.
+A stock is only tradeable on days it was actually in the index. Everything below is computed on that simulated account.
+
+### Price data (step 1)
+Downloads daily open / high / low / close / volume from Yahoo Finance for every ticker that was in the S&P 500 since
+2016 (past members included, from the published membership history) plus SPY. Prices are adjusted for splits and
+dividends. Indicators (RSI, Williams %R, moving averages, momentum ranks…) are computed from these once and cached.
+
+### Build your own plan (step 2)
+No math; it writes the rules to a file in `strategies/`. The plain-English box is the same text the report shows.
+
+### Reports (step 3)
+The account's daily value over the whole period is the basis for every number:
+
+| Number | How it is computed |
+|---|---|
+| Return per year (CAGR) | the constant yearly growth rate that turns the start value into the end value |
+| Worst drop (max drawdown) | the largest fall from any previous high of the account, in percent |
+| Volatility | standard deviation of daily returns × √252 (yearly) |
+| Sharpe | average daily return ÷ its standard deviation, × √252. Return per unit of wobble; SPY ≈ 0.9 |
+| Sortino | like Sharpe, but only down days count as wobble |
+| Calmar | return per year ÷ worst drop. Return per unit of pain |
+| Profit factor | sum of all winning trades ÷ sum of all losing trades |
+| Win rate, average trade, days held | straight from the trade list |
+| SPY buy & hold | the same account holding only SPY |
+| SPY timing | holding SPY only on days it closed above its 200-day average, otherwise cash |
+| Verdict | the 7 checks of section 4, each a comparison of these numbers between the plan, SPY and SPY timing; the luck check is the quick stress test (below) |
+
+Development period = backtest start to the test-period start; test period = test-period start to today, computed
+separately with the same rules. *Compare* runs the same thing for every plan and adds the correlation of daily
+returns between plans (1 = move together, 0 = unrelated).
+
+### Stress test (step 4)
+Asks whether the report could be a fluke. **Quick** runs the first two, **Full** all four:
+
+1. **Bootstrap.** Take the plan's daily returns minus SPY's. Build 2,000 alternative histories by re-shuffling
+   20-day blocks of those excess returns, and count how often the average stays above zero. 95% means the
+   edge over SPY survived in 95% of re-shuffles.
+2. **Deflated Sharpe ratio** (Bailey & López de Prado). The probability that the excess Sharpe is above zero,
+   after correcting for the number of variants tried: with 400 variants the best one is expected to look good by
+   chance alone, so the bar rises with the "variants tried" field. The verdict's *Unlikely to be luck* is the
+   smaller of 1 and 2 and must be at least 90%.
+3. **Neighbourhood.** Change one setting at a time (RSI length 4 → 3 or 5, threshold 15 → 10 or 20, stop
+   3 → 4 × ADR…) and re-run. A real edge degrades gently; a lucky one collapses next door.
+4. **Costs and random entries.** Re-run at double costs (0.10% per side). Then keep every trade's stock, year and
+   holding time but move its entry to a random day that passes the same filters (trend, market, liquidity),
+   30 times. If random days do as well, the indicator's timing adds nothing; the filters did the work.
+
+### Search (step 5)
+Tries many rule sets and tells you how good "pick the best" really is:
+
+1. Draw N rule sets at random from the chosen space (e.g. RSI/Williams/Stochastic lengths × thresholds × filters × exits).
+2. **Walk-forward.** Split the development period into folds: 3 years to pick, the following 1 year to trade, then
+   move forward a year. In each fold every rule set is backtested on the 3 years and ranked by the chosen metric;
+   the winner is run on the next year it has never seen. Chaining those unseen years gives the **stitched OOS**
+   line: what you would have earned by re-picking the best rules every year. This, not the in-sample score, is
+   the honest result of the search.
+3. **Best set.** The rule set with the best score over the whole development period is saved as
+   `best_params.json` and run once on the test period. Its development-period numbers are in-sample and flattered
+   by the search; its test-period and stitched-OOS numbers are not.
+4. Constraints: at least 20 trades per window and a worst drop no deeper than 35%, otherwise the set is discarded.
+
+**Rank by** decides what "best" means in step 2 and 3: *Calmar* = most return per unit of worst drop (favours
+smooth equity, the default), *Sharpe* = most return per unit of daily wobble, *Return* = highest growth regardless
+of drops (tends to pick wild sets). The search also records the number of variants tried, which the stress test
+uses to deflate the luck check.
