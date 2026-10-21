@@ -11,7 +11,8 @@ commands into the Terminal and read the result in your browser.
 Double-click **`start.command`** (Mac) or **`start.bat`** (Windows). The first run sets everything up; then the
 **Workbench** opens in your browser with one button per step below (download data, reports, planner, stress test,
 search). Long steps run in the background and show their progress under *Jobs*. Everything in sections 1–5 can be
-done from there; the Terminal commands remain for reference.
+done from there; the Terminal commands remain for reference. The switch at the top of the Workbench chooses **Stocks**
+(sections 1–5 below) or **Options: SPY call spreads** (its own four steps: data, your routine, reports, variants; see section 7).
 
 **In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). Your own rules → step 2
 Planner: write them down first, test once, don't tweak until it looks good. See results → step 3 *Report for this plan*

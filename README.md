@@ -1,9 +1,8 @@
 # StrategyAnalyser
 
-Tests indicator-based swing trading rules on S&P 500 stocks over 10+ years, with clear buy and sell rules.
-It compares them honestly against simply holding the index.
-
-No programming needed: double-click the launcher and click through the Workbench. The **[Guide](docs/GUIDE.md)** explains each step in more detail.
+Tests trading rules over 10+ years and compares them honestly against simply holding the index: indicator-based
+buy and sell rules on S&P 500 stocks, and SPY call spread routines (options). No programming needed: double-click
+the launcher and click through the Workbench. The **[Guide](docs/GUIDE.md)** explains each step in more detail.
 
 ## Quick start
 
@@ -14,26 +13,34 @@ on Windows tick *"Add Python to PATH"* in the installer). Then:
    The first run installs the Python packages (1–2 minutes). Keep the window open while you work.
    *Mac: if it says the file can't be opened, right-click → Open once. If it opens in a text editor instead,
    open the Terminal in this folder and run `bash start.command`.*
-2. Your browser opens the **Strategy Workbench**. Every step is a button, in order:
+2. Your browser opens the **Strategy Workbench**. The switch at the top picks what you want to test;
+   each side has its own numbered steps, every step is a button.
+
+### Stocks: buy & sell S&P 500 shares
 
 | Step | Button | What happens |
 |---|---|---|
-| 1 | **Download all price data** | ~14 years of daily prices for every stock that was in the S&P 500 since 2016, plus SPY (1–2 min). The status line then shows the date range and how much of the index history has prices. Backtests only buy a stock while it was in the index. |
+| 1 | **Download all price data** | ~14 years of daily prices for every stock that was in the S&P 500 since 2016, plus SPY (1–2 min). Later only *Add the latest days*. Backtests only buy a stock while it was in the index. |
 | 2 | **Open the Planner** | describe your own rules (dip buying or trend following), save, run. Write the rules down before you look at any result. |
-| 3 | **Report for this plan** | one-page report for the selected rule set: verdict (7 checks, all must pass), key numbers, growth of $10,000 vs SPY, drawdowns, year by year |
-| 3 | **Compare all plans with SPY** | every saved rule set on one page against SPY buy & hold and SPY timing |
+| 3 | **Report for this plan** | one-page report for the selected plan: verdict (7 checks, all must pass), key numbers, growth of $10,000 vs SPY, drawdowns, year by year |
+| 3 | **Compare all plans with SPY** | every saved plan, stocks and options, on one page against SPY buy & hold and SPY timing |
 | 4 | **Quick / Full** stress test | verdict and luck checks (1 min), or also neighbouring settings, costs and a random-entry test (5 min); text report |
 | 5 | **Start search** | tries hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
 
-**In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). Your own rules → step 2
-Planner: write them down first, test once, don't tweak until it looks good. See results → step 3 *Report for this plan*
-or *Compare all plans with SPY*. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
-Results appear under *Jobs* → *Open report*; read the **test period** and the **verdict** first.
+### Options: SPY call spreads
 
-The switch at the top chooses **Stocks** (the steps above) or **Options: SPY call spreads** (its own four steps: *Download SPY + VIX*, *Build your spread routine* with width, expiry, the debit you pay and the close rule → *Save as a plan*, *Reports* with the same one-page report, *Try 720 setups*).
+| Step | Button | What happens |
+|---|---|---|
+| 1 | **Download SPY + VIX** | daily SPY, VIX and T-bill history since 2010 (seconds). The spreads are priced with Black-Scholes from the VIX of the day; the payoff at expiry is exact. |
+| 2 | **Backtest this setup** / **Save as a plan** | your routine: width, the debit you pay (the strikes are wherever that debit lands that day), expiry, cadence (every third Friday, monthly, weekly), close rules, stop, trend filter. *Backtest* gives a quick text result; *Save as a plan* keeps it for step 3. |
+| 3 | **Report for this plan** / **Compare all plans with SPY** | the same one-page report and comparison as for stock plans |
+| 4 | **Try N setups** | every combination of the strikes, widths, expiries, close rules, stops, cadences and filters you type in (or a random sample of them); your own setup's rank is printed below the table |
 
-Long steps run in the background; their progress and results appear under *Jobs* on the right. You can close the
-browser tab; the jobs keep running while the launcher window is open.
+**In short.** Stocks: data once → Planner, write the rules down first and test once → report / compare → Quick stress
+test; search only to let the computer look for rules. Options: data once → fill in your routine and save it → report /
+compare → try variants. Results appear under *Jobs* on the right → *Open report*; read the **test period** and the
+**verdict** first. Long steps run in the background; you can close the browser tab, the jobs keep running while the
+launcher window is open.
 
 ### How to read a result
 | Where | What to look for |
@@ -55,13 +62,18 @@ python3 -m backtest.report --params strategies/<plan>.json --start <first day> -
 ### The same steps in the Terminal
 ```sh
 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+# stocks
 python3 -m backtest.fetch --historical       # step 1
 python3 -m backtest.app                      # step 2, planner + workbench
-python3 -m backtest.report                   # step 3 (strategies/willr.json)
+python3 -m backtest.report --params strategies/willr.json   # step 3
 python3 -m backtest.compare                  # step 3, all plans
 python3 -m backtest.analyze --params strategies/<plan>.json --quick       # step 4
 python3 -m backtest.tune --space momentum --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20   # step 5
-python3 -m backtest.spreads                  # step 6, SPY call spreads (--fetch once; --params strategies/bcs_495.json for the HTML report; --tune)
+# options
+python3 -m backtest.spreads --fetch          # step 1
+python3 -m backtest.spreads --width 10 --fixed-debit 4.95 --dte 60 --save "My spread plan"   # step 2
+python3 -m backtest.spreads --params strategies/bcs_495.json                                  # step 3, one-page report
+python3 -m backtest.spreads --tune --grid dte=30,45,60 --grid "strike=debit:0.5,debit:0.6"    # step 4
 python3 -m backtest                          # list of all commands
 ```
 Details for every step, and the math behind each button: **[docs/GUIDE.md](docs/GUIDE.md)** (section 7).
