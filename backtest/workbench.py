@@ -76,7 +76,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     <li><b>See results:</b> step 3, pick a plan → <i>Report for this plan</i>, or <i>Compare all plans with SPY</i>.</li>
     <li><b>Check it holds up:</b> step 4 <i>Quick</i> stress test on the plan; step 5 only if you want the computer to search for rules.</li>
   </ol>
-  <p>Results appear under <b>Jobs</b> on the right: click <i>Open report</i>. Read the <b>test period</b> and the <b>verdict</b> first; all 7 checks must pass before paper trading. Close this tab any time; jobs keep running while the launcher window is open.</p>
+  <p>Results appear under <b>Jobs</b> on the right: click <i>Open report</i>. Read the <b>test period</b> and the <b>verdict</b> first; all 7 checks must pass. Close this tab any time; jobs keep running while the launcher window is open.</p>
 </details>
 <details class="howto" open data-mode="options">
   <summary>How to use</summary>
@@ -199,7 +199,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   <div class="card readme" data-mode="stocks options">
     <div class="step"><span class="n">?</span><h2>How to read a result</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The honest numbers are the test period and the verdict. Everything else can look good by chance.</span></span></div>
     <table>
-      <tr><th>Verdict</th><td>7 checks agreed on before testing. All must pass before paper trading.</td></tr>
+      <tr><th>Verdict</th><td>7 checks agreed on before testing. All must pass before the result means anything.</td></tr>
       <tr><th>Test period</th><td>2025 to today: the rules never saw this data. These are the honest numbers.</td></tr>
       <tr><th>SPY timing</th><td>Hold SPY only above its 200-day average. If a strategy can't beat this, its stock picking adds nothing.</td></tr>
       <tr><th>Unlikely to be luck</th><td>Below 90% means chance alone produces results like this. Each variant you tried raises the bar.</td></tr>

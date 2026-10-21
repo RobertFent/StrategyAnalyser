@@ -1,116 +1,70 @@
 # StrategyAnalyser
 
-Tests trading rules over 10+ years and compares them honestly against simply holding the index: indicator-based
-buy and sell rules on S&P 500 stocks, and SPY call spread routines (options). No programming needed: double-click
-the launcher and click through the Workbench. The **[Guide](docs/GUIDE.md)** explains each step in more detail.
+An analysis tool: it backtests trading rules over 10+ years and compares them honestly with simply holding the
+index. Two kinds of rules: indicator-based buy and sell rules on S&P 500 stocks, and SPY call spread routines
+(options). No programming needed.
 
 ## Quick start
 
-**No Terminal needed.** You need Python 3.10 or newer ([python.org/downloads](https://www.python.org/downloads/);
-on Windows tick *"Add Python to PATH"* in the installer). Then:
+You need Python 3.10 or newer ([python.org/downloads](https://www.python.org/downloads/); on Windows tick
+*"Add Python to PATH"* in the installer).
 
-1. **Double-click `start.command`** (Mac) or **`start.bat`** (Windows) in this folder.
-   The first run installs the Python packages (1–2 minutes). Keep the window open while you work.
-   *Mac: if it says the file can't be opened, right-click → Open once. If it opens in a text editor instead,
-   open the Terminal in this folder and run `bash start.command`.*
-2. Your browser opens the **Strategy Workbench**. The switch at the top picks what you want to test;
-   each side has its own numbered steps, every step is a button.
+1. **Double-click `start.command`** (Mac) or **`start.bat`** (Windows). The first run installs the packages
+   (1–2 minutes); keep the window open while you work. *Mac: if the file "can't be opened", right-click → Open once.*
+2. Your browser opens the **Strategy Workbench**. The switch at the top picks **Stocks** or **Options**; each side has
+   numbered steps, every step is a button. Long steps run in the background and show under *Jobs* on the right.
 
-### Stocks: buy & sell S&P 500 shares
+**Stocks: buy & sell S&P 500 shares**
 
 | Step | Button | What happens |
 |---|---|---|
 | 1 | **Download all price data** | ~14 years of daily prices for every stock that was in the S&P 500 since 2016, plus SPY (1–2 min). Later only *Add the latest days*. Backtests only buy a stock while it was in the index. |
-| 2 | **Open the Planner** | describe your own rules (dip buying or trend following), save, run. Write the rules down before you look at any result. |
-| 3 | **Report for this plan** | one-page report for the selected plan: verdict (7 checks, all must pass), key numbers, growth of $10,000 vs SPY, drawdowns, year by year |
-| 3 | **Compare all plans with SPY** | every saved plan, stocks and options, on one page against SPY buy & hold and SPY timing |
-| 4 | **Quick / Full** stress test | verdict and luck checks (1 min), or also neighbouring settings, costs and a random-entry test (5 min); text report |
-| 5 | **Start search** | tries hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
+| 2 | **Open the Planner** | describe your own rules (dip buying or trend following), save. Write the rules down before you look at any result. |
+| 3 | **Report for this plan** / **Compare all plans with SPY** | one-page report (verdict, key numbers, growth of $10,000 vs SPY, drawdowns, year by year), or every saved plan on one page against SPY buy & hold and SPY timing |
+| 4 | **Quick / Full** stress test | luck checks (1 min), or also neighbouring settings, costs and random entries (5 min) |
+| 5 | **Start search** | hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
 
-### Options: SPY call spreads
+**Options: SPY call spreads**
 
 | Step | Button | What happens |
 |---|---|---|
-| 1 | **Download SPY + VIX** | daily SPY, VIX and T-bill history since 2010 (seconds). The spreads are priced with Black-Scholes from the VIX of the day; the payoff at expiry is exact. |
-| 2 | **Backtest this setup** / **Save as a plan** | your routine: width, the debit you pay (the strikes are wherever that debit lands that day), expiry, cadence (every third Friday, monthly, weekly), close rules, stop, trend filter. *Backtest* gives a quick text result; *Save as a plan* keeps it for step 3. |
-| 3 | **Report for this plan** / **Compare all plans with SPY** | the same one-page report and comparison as for stock plans |
-| 4 | **Try N setups** | every combination of the strikes, widths, expiries, close rules, stops, cadences and filters you type in (or a random sample of them); your own setup's rank is printed below the table |
+| 1 | **Download SPY + VIX** | SPY, VIX and T-bill history since 2010 (seconds). Spreads are priced with Black-Scholes from the VIX of the day; the payoff at expiry is exact. |
+| 2 | **Backtest this setup** / **Save as a plan** | your routine: width, the debit you pay (the strikes are wherever that debit lands that day), expiry, cadence, close rules, stop, trend filter |
+| 3 | **Report for this plan** / **Compare all plans with SPY** | the same report and comparison as for stock plans |
+| 4 | **Try N setups** | every combination of the strikes, widths, expiries, rules, cadences and filters you type in; your own setup's rank is printed below the table |
 
-**In short.** Stocks: data once → Planner, write the rules down first and test once → report / compare → Quick stress
-test; search only to let the computer look for rules. Options: data once → fill in your routine and save it → report /
-compare → try variants. Results appear under *Jobs* on the right → *Open report*; read the **test period** and the
-**verdict** first. Long steps run in the background; you can close the browser tab, the jobs keep running while the
-launcher window is open.
+**Reading a result:** the **test period** (2025 – today, never used to pick any rule) and the **verdict** (7 checks,
+all must pass) are the honest numbers; everything else can look good by chance. Details and the math behind each
+button: **[docs/GUIDE.md](docs/GUIDE.md)**. Terminal equivalents: `python3 -m backtest`.
 
-### How to read a result
-| Where | What to look for |
-|---|---|
-| Verdict | all 7 checks must pass before paper trading |
-| Test period (2025 – today) | the honest numbers; the rules never saw this data |
-| SPY timing | hold SPY only above its 200-day average; if a strategy can't beat this, its stock picking adds nothing |
-| Unlikely to be luck | below 90% means chance alone produces results like this; each variant you tried raises the bar |
-| Stitched OOS (searches) | rules re-picked each year and traded the next; compare with the SPY lines below it, not with the in-sample score |
+## Main finding (21 October 2026)
 
-### Paper trading (after a plan passed)
-In a Terminal in this folder, with the environment on (`source .venv/bin/activate`, Windows `.venv\Scripts\activate`):
-```sh
-python3 -m backtest.fetch --update                                        # daily: latest prices
-python3 -m backtest.signals --params strategies/<plan>.json --holding AAPL MSFT   # buy candidates, sell signals
-python3 -m backtest.report --params strategies/<plan>.json --start <first day> --holdout-start <first day>  # monthly check
-```
+Several thousand stock rule sets were tested (10 oversold indicators, momentum and breakouts, trend and market
+filters, stops, exits), year by year on 2019–2024 and on 2025–2026, with point-in-time index membership and a
+check for luck. **No stock rule set beats holding SPY**; the 200-day trend filter does the work, the indicators add
+little. **The SPY call spread routine is the only plan that passes every check**, but its option prices are modelled
+from the VIX and six months of real trading were flat, so it is not confirmed.
 
-### The same steps in the Terminal
-```sh
-python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-# stocks
-python3 -m backtest.fetch --historical       # step 1
-python3 -m backtest.app                      # step 2, planner + workbench
-python3 -m backtest.report --params strategies/willr.json   # step 3
-python3 -m backtest.compare                  # step 3, all plans
-python3 -m backtest.analyze --params strategies/<plan>.json --quick       # step 4
-python3 -m backtest.tune --space momentum --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20   # step 5
-# options
-python3 -m backtest.spreads --fetch          # step 1
-python3 -m backtest.spreads --width 10 --fixed-debit 4.95 --dte 60 --save "My spread plan"   # step 2
-python3 -m backtest.spreads --params strategies/bcs_495.json                                  # step 3, one-page report
-python3 -m backtest.spreads --tune --grid dte=30,45,60 --grid "strike=debit:0.5,debit:0.6"    # step 4
-python3 -m backtest                          # list of all commands
-```
-Details for every step, and the math behind each button: **[docs/GUIDE.md](docs/GUIDE.md)** (section 7).
-
-## Main finding (status 21 October 2026)
-Several thousand rule sets were tested: 10 oversold indicators, momentum and breakout rules, trend and market
-filters, stops and exits. They were checked year by year on 2019–2024 and on a 2025–2026 period never used to
-choose them, with point-in-time index membership (no survivorship bias) and a check for luck.
-
-**No rule set beats holding SPY.** With survivorship bias removed, the best dip-buying and momentum rules make
-about 7.6% a year against SPY's 15%, with similar drawdowns, and none passes the "unlikely to be luck" check.
-The 200-day trend filter does most of the work; the indicators add little.
-
-**One plan passes every check: a SPY bull call spread routine** (every third Friday, the $10-wide spread that costs $4.95, two
-monthly expirations out, only above the 200-day average). 23.8% a year with a −22% worst drop in the backtest, but the option
-prices are modelled from the VIX and six months of real trading were flat; paper-trade and log the fills before believing it
-(research doc, section 7.3).
-
-| 2016 – Oct 2026, point-in-time members, 88% of member-days with prices | Return / year | Worst drop | Verdict |
+| 2016 – Oct 2026 | Return / year | Worst drop | Verdict |
 |---|---|---|---|
 | SPY buy & hold | 15.1% | −33.7% | – |
 | SPY timing (hold SPY only above its 200-day average) | 11.4% | −20.7% | – |
-| Reference dip-buying rules (`strategies/willr.json`) | 7.6% | −27.4% | 2 of 7, luck check 5% |
-| Momentum, best of 400 (`strategies/best_strategy.json`) | 7.6% out-of-sample 2019–24 | −29.2% | luck check 0% |
-| RSI(4) rule book, best variant: deep below the 200-day average (`strategies/rsi4_deep.json`) | 8.6% | −30.7% | 3 of 7, luck check 4% |
-| **SPY bull call spread, $4.95 on $10, 2 monthly expirations (`strategies/bcs_495.json`)** | **23.8%** | **−22.2%** | **7 of 7, luck check 93%**, option prices modelled: not confirmed by real trades yet |
+| Dip-buying reference (`willr.json`) | 7.6% | −27.4% | 2 of 7, luck 5% |
+| Momentum, best of 400 (`best_strategy.json`) | 7.6% walk-forward | −29.2% | luck 0% |
+| RSI(4) rule book, best variant: deep below the 200-day average (`rsi4_deep.json`) | 8.6% | −30.7% | 3 of 7, luck 4% |
+| **SPY call spread, $4.95 on $10, 2 monthly expirations (`bcs_495.json`)** | **23.8%** | **−22.2%** | **7 of 7, luck 93%**, prices modelled |
 
-Full results, verdicts and reasoning: **[docs/strategy-research.md](docs/strategy-research.md)**.
-Searching, stress tests and engine details: [docs/TECHNICAL.md](docs/TECHNICAL.md).
+Full results and reasoning: **[docs/strategy-research.md](docs/strategy-research.md)**. Engine and research
+commands: [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## What's in here
 | Folder | Contents |
 |---|---|
-| `strategies/` | saved rule sets: `willr.json` (dip-buying reference), `best_strategy.json` (best of the momentum search), `rsi4_*.json` (RSI(4) rule book: classic, OBE, 5% adds, deep below the average), `bcs_*.json` (SPY call spread routine and three tuned variants), `candidate_breadth.json`, `coach_plan.json` (template), plus your own |
+| `strategies/` | saved plans: `willr.json`, `best_strategy.json`, `rsi4_*.json` (RSI(4) rule book variants), `bcs_*.json` (SPY call spread routine and three tuned variants), `candidate_breadth.json`, `coach_plan.json` (template), plus your own |
 | `symbols/` | index lists and `sp500_membership.csv` (who was in the S&P 500 when) |
 | `docs/` | guide, findings, technical notes |
 | `backtest/` | the code (`python3 -m backtest.<command>`) |
-| `output/` | reports and results (created when you run something) |
+| `output/` | reports and results |
 
-*Backtests are not a promise. Prices of companies that were delisted after leaving the index are mostly unavailable, so results are still slightly optimistic.*
+*Backtests are not a promise. Prices of companies delisted after leaving the index are mostly unavailable, so stock
+results are slightly optimistic; option prices are modelled, not quoted.*

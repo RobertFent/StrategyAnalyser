@@ -50,5 +50,5 @@ def format_verdict(rows: list[tuple[str, bool, str]]) -> list[str]:
     lines = [f'  [{"PASS" if ok else "FAIL"}] {name:<42} {detail}' for name, ok, detail in rows]
     passed = sum(ok for _, ok, _ in rows)
     lines.append(f'  => {passed}/{len(rows)} passed: '
-                 + ('ADOPT (then paper-trade first)' if passed == len(rows) else 'DO NOT ADOPT'))
+                 + ('PASSES every check' if passed == len(rows) else 'DOES NOT PASS'))
     return lines

@@ -149,7 +149,7 @@ def render(*, out_stem: str, title: str, subtitle_what: str, cost_text: str, not
         '{{RULES}}': html.escape(rules),
         '{{VERDICT_CLASS}}': 'ok' if headline_ok else 'bad',
         '{{VERDICT_HEAD}}': (f'{passed} of {len(verdict)} checks passed – '
-                             + ('worth paper trading' if headline_ok else 'not good enough to trade')),
+                             + ('passes every check' if headline_ok else 'does not pass')),
         '{{VERDICT_ROWS}}': verdict_rows,
         '{{K_CAGR}}': _pct(full_m['cagr']), '{{K_SPY_CAGR}}': _pct(full_b['SPY buy & hold']['cagr']),
         '{{K_DD}}': _pct(full_m['max_drawdown']), '{{K_SPY_DD}}': _pct(full_b['SPY buy & hold']['max_drawdown']),
@@ -355,7 +355,7 @@ footer { color: var(--text-3); font-size: 13px; margin-top: 18px; text-align: ce
     <dt>SPY timing</dt><dd>Simple benchmark: hold the S&amp;P 500 ETF only while it is above its 200-day average, otherwise cash. If a strategy can't beat this, its stock picking adds nothing.</dd>
     <dt>Development period</dt><dd>The years used to find the rules. Results here always look good.</dd>
     <dt>Test period</dt><dd>Data the rules have never seen. This is the honest number.</dd>
-    <dt>Verdict</dt><dd>Seven checks agreed on before testing (strong enough vs SPY, holds up in the test period, survives {{STRESS}}, smaller drops than SPY, unlikely to be luck). All must pass before paper trading.</dd>
+    <dt>Verdict</dt><dd>Seven checks agreed on before testing (strong enough vs SPY, holds up in the test period, survives {{STRESS}}, smaller drops than SPY, unlikely to be luck). All must pass before the result means anything.</dd>
     <dt>Unlikely to be luck</dt><dd>Probability that the edge over SPY is real, from the day-to-day ups and downs of the difference between the strategy and SPY. Below 90% the result is within what chance alone produces. If many variants were tried before this one, the bar rises (a lucky best-of-100 looks impressive by itself).</dd>
   </dl>
 </section>

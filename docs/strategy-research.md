@@ -1,6 +1,6 @@
 # Strategy research: findings and conclusion
 
-*Status: 19 October 2026*
+*Status: 21 October 2026 (sections 1–6 are the research log; section 7 has the current comparison and conclusion)*
 
 ## Question
 Is there an indicator-based, long-only swing strategy with clear entry and exit rules on
@@ -115,6 +115,40 @@ picture is: days that pass the trend filter (stock and SPY above their 200-day a
 So the indicator does add about +0.2% per trade *given* the filter, and the filter gives it back. Net ≈ SPY,
 and after survivorship bias, below SPY.
 
+### 5. Comparison page and the RSI(4) rule book (20 Oct, evening)
+`python3 -m backtest.compare` puts several rule sets and SPY on one page. The current table is in 7.1; what the first run showed:
+
+Notes:
+- The RSI(4) rule book (S&P 100 / Nasdaq-100, $5–$250, above the 200-day average, RSI(4) below 15, max 3 new
+  trades a day, 10 positions, prioritised by each symbol's past ROI, stop loss = entry − 4 × ADR(20)) is implemented
+  as written, **but the profit exit was not in the excerpt**. The files use a placeholder (sell when RSI(4) closes
+  back above 55). Replace it with the real rule before reading anything into these numbers.
+- OBE entries (only buy if the open is 2%+ below the signal close) cut the trades from ~1,600 to ~145 and the
+  return with them; 5% adds raise the return (7.1% vs 4.4%) with the 4 × ADR stop capping the damage of averaging down.
+- The momentum set's 18.5% / yr includes its own tuning period; its honest number is the 7.6% / yr walk-forward above.
+- The daily returns of the dip-buying and momentum rules correlate only ~0.5, so mixing them would smooth the ride,
+  but none of them earns more than SPY.
+
+### 6. The momentum plan in practice (21 Oct)
+`best_strategy.json` is the best of 400 momentum / breakout rule sets. The rules:
+
+- **Buy:** on the first trading day of each month, every S&P 500 stock that newly entered the top 30 by 6-month
+  performance (price ≥ $5, ≥ $5M traded per day). Buy at the next open, 10% of the account each, max 10 positions;
+  with more signals than free slots, take the strongest.
+- **Sell:** when the close is below the 200-day average, at the next open. No stop loss, no target.
+- In practice: one look per month, ~15 trades a year, median hold about 6 months, 46% of trades win; the few big
+  winners (STX +363%, AMD +204%, FIX +45% in 2025–26) pay for many −20…−30% losers (HOOD, LUV, DOW, SMCI).
+
+| | Return / yr | Worst drop | Not luck |
+|---|---|---|---|
+| 2016 – Oct 2026 incl. the years the rules were picked on | 18.5% | −28.6% | 1% |
+| Walk-forward 2019–24 (rules re-picked each year, traded the next) | 6.8% | −38% | – |
+| Test period 2025 – today (never used to pick rules) | −4.6% | −21.8% | – |
+| SPY buy & hold, same periods | 15.1% / 17.1% / 17.6% | −33.7% | – |
+
+Verdict 3 / 7. The 18.5% is the number that made it "best", and it is the one not to trust: it was selected on
+that data. Every honest view (walk-forward, test period, luck check) is below SPY. Kept as a reference for what momentum looks like here.
+
 ## Update 21 October 2026: all plans on one page, deep-below RSI(4), SPY call spreads
 
 Everything below is one run on the data of 21 October 2026 (`python3 -m backtest.compare`; stock plans on
@@ -194,15 +228,15 @@ is a dial on the risk, not a free lunch.
    +61% in the test period. The family looks fine; any single number does not.
 
 **What to do with it.**
-- Paper-trade the routine exactly as written for 3–6 months and **log every fill: date, SPY price, both strikes,
-  debit paid**. Compare each fill with the strikes the model would have chosen that day (the "strikes:" line of
-  `python3 -m backtest.spreads --params strategies/bcs_495.json`). If your strikes are consistently higher, the
-  backtest is too kind and the win rate will be lower than 75%.
+- The one check that settles it: **compare real fills with the model**. For each real spread (date, SPY price,
+  both strikes, debit paid) look at the strikes the model would have chosen that day (the "strikes:" line of
+  `python3 -m backtest.spreads --params strategies/bcs_495.json`). If the real strikes are consistently higher,
+  the backtest is too kind and the win rate will be lower than 75%. Six months of past fills are enough to start.
 - Keep the size honest: 10% of the account at risk is the backtest's −22% worst drop; 5% is −11% for 11% a year.
 - The comparison that matters for the coach is **same risk, which earns more**: at a −20% worst drop the spread
   routine (10% at risk) backtests at 23.8% a year, SPY timing at 11.4%, SPY itself at 15.1% with −34%. If the
-  paper trades confirm the model, that is a real improvement; if they don't, the routine is a leveraged SPY
-  position with extra costs.
+  fills confirm the model, that is a real improvement; if they don't, the routine is a leveraged SPY position
+  with extra costs.
 
 ### 7.4 Which is the best?
 
@@ -212,9 +246,8 @@ numbers rest on a model rather than on prices, and the one plan where real tradi
 backtest. Among the stock plans nothing beats SPY; the deep-below RSI(4) rule is the most interesting of them
 because it works in crashes, but it is a bet on rebounds, not on the indicator.
 
-Ranking for the coach: 1. SPY buy & hold as the thing to beat; 2. the spread routine, pending paper-trade
-confirmation of the fills; 3. SPY timing if smaller drops are the goal; 4. everything else as research, not as a
-plan.
+Ranking for the coach: 1. SPY buy & hold as the thing to beat; 2. the spread routine, pending the fill check;
+3. SPY timing if smaller drops are the goal; 4. everything else as research, not as a plan.
 The spread variants found by the tune (7.5) rank with the routine: more return in the model, more dependence on the model.
 
 ### 7.5 Other SPY call spread variants (from the 720-setup tune)
@@ -253,10 +286,10 @@ What the tune says, read with the caveats of 7.3 in mind:
   That is what a setup that was *not* found by searching should look like. The variants above were found by
   searching 720 combinations and are flattered accordingly.
 
-**If one variant is worth paper trading next to yours, it is the one-month in-the-money spread without the stop**
+**If one variant is worth checking against real fills next to yours, it is the one-month in-the-money spread without the stop**
 (`debit:0.6, $10, 30 days, 99%, expiry, no filter`: 41% a year, −21% drop in the development period, 61% in the
-test period, held to expiry so the model only picks the strikes). Log the fills for both routines the same way; the
-gap between model and market will show up in the debit you actually pay for the model's strikes.
+test period, held to expiry so the model only picks the strikes). The gap between model and market shows up in
+the debit the market asks for the model's strikes.
 
 ## What we learned
 1. **The 200-day trend filter does most of the work.** Without it, returns halve and drawdowns double. Holding only SPY above its 200-day average gets a similar Sharpe (0.97) with no stock picking at all.
@@ -271,18 +304,13 @@ gap between model and market will show up in the debit you actually pay for the 
 - **No rule set found here is clearly better than SPY, and with survivorship bias removed the best ones are clearly worse.** The best ones roughly match SPY's return per unit of risk (Sharpe) and cut the drawdown by about half. They earn less in total, and in 2025–26 they also lost to the simple "SPY above its 200-day average" rule.
 - **A pure "buy the oversold dip" strategy on S&P 500 stocks has no robust edge in 2016–2026.** Its value is lower drawdown, and that comes from the trend filter.
 - **Searching more parameters or indicators won't change this.** It only produces more lucky in-sample winners.
-- **(21 Oct) The SPY call spread routine is the only plan that passes every check** (23.8% a year, −22% worst drop, 7 / 7), but its option prices are modelled and real trading has not yet confirmed it; see section 7.3 for what to verify before trusting it.
+- **(21 Oct) The SPY call spread routine is the only plan that passes every check** (23.8% a year, −22% worst drop, 7 / 7), but its option prices are modelled and six months of real trades were flat; section 7.3 says what to check before trusting it.
 
-## Next steps
-1. **Test the coach's trading plan as a fixed hypothesis.** Run `python3 -m backtest.plan`, answer the questions
-   before looking at any result, then run `python3 -m backtest.report --params strategies/<plan>.json` once.
-   The verdict decides. Don't tweak afterwards. To compare variants, decide all of them up front and report every one.
-2. **Paper trade for 3–6 months** whatever passes, and `willr.json` for comparison. How to do it is in [GUIDE.md](GUIDE.md), section 5.
-3. **If smaller drops are the goal**, compare honestly with SPY timing. It is simpler, cheaper and shows similar risk-adjusted results.
-4. **Open ideas** (only as fixed hypotheses, not new searches):
-   - a cap on positions per sector
-   - larger positions on broad-pullback days
-   - position size based on volatility
+## Next steps (analysis only)
+1. **Check the spread model against real fills** (7.3): real strikes vs model strikes for the same debit. This decides whether the one passing plan is real.
+2. **Implement the RSI(4) rule book's real profit exit**; every `rsi4_*.json` still uses the placeholder.
+3. **Add volatility skew to the option model** if the fill check shows the strikes are consistently off.
+4. **Test any new idea as a fixed hypothesis** (Planner, written down first, reported once), not as a new search.
 
 ## Reproduce
 ```sh
