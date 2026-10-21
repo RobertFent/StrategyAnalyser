@@ -92,6 +92,7 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
         cmd = py + ['backtest.spreads', '--start', start, '--holdout-start', holdout, '--strike-mode', strike_mode,
                     '--offset', f'{num("offset", -10, 10, 0.01):.4f}', '--width', f'{num("width", 1, 100):g}',
                     '--dte', f'{int(num("dte", 7, 365))}', '--target', f'{num("target", 10, 100, 0.01):.2f}',
+                    '--target-div', f'{num("target_div", 0, 100, 0.01):.2f}' if opts.get('target_div') else f'{num("target", 10, 100, 0.01):.2f}',
                     '--stop', f'{num("stop", 0, 100, 0.01):.2f}', '--cadence', cadence,
                     '--trend-ma', f'{int(num("trend_ma", 0, 400))}']
         if float(opts.get('debit') or 0) > 0:

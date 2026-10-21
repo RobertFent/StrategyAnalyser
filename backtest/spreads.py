@@ -102,6 +102,7 @@ class SpreadParams:
     width: float = 10.0        # dollars between the strikes
     dte: int = 60              # calendar days to expiry (nearest Friday)
     target: float = 0.99       # close when the spread is worth target * width (9.90 on a 10-wide)
+    target_div: float = 0.95   # same, for spreads expiring in a dividend month (Mar/Jun/Sep/Dec: SPY goes ex-dividend on expiration day)
     stop: float = 0.0          # close when the spread lost this share of the debit (0 = never)
     cadence: str = 'expiry'    # expiry (third Friday, when the old one expires) | monthly (1st day) | weekly | next
     trend_ma: int = 200        # open only when SPY > its N-day average (0 = always)
@@ -142,6 +143,8 @@ class SpreadParams:
         lines = [f'OPEN on {cad}' + (f', only while SPY is above its {self.trend_ma}-day average' if self.trend_ma else '') + ':',
                  strikes,
                  f'CLOSE when the spread is worth {self.target * 100:.0f}% of its width (${self.target * self.width:.2f} on a ${self.width:g}-wide)'
+                 + (f', {self.target_div * 100:.0f}% (${self.target_div * self.width:.2f}) for spreads expiring in Mar/Jun/Sep/Dec because SPY goes ex-dividend on that expiration day'
+                    if self.target_div and self.target_div != self.target else '')
                  + (f', when it has lost {self.stop * 100:.0f}% of the debit' if self.stop else '') + ', or at expiry',
                  f'SIZE: {self.risk * 100:.0f}% of the account at risk in total, about {self.concurrent()} spread(s) open at once '
                  f'({self.risk / self.concurrent() * 100:.1f}% each); ${self.slip:.2f} slippage per side, '
@@ -225,7 +228,8 @@ def backtest(df: pd.DataFrame, p: SpreadParams, start: str, end: str | None = No
             # what you paid above the model fades out linearly towards expiry: day 0 = your price, expiry = exact payoff
             fade = t_years / t_years[0] if t_years[0] > 0 else np.zeros_like(t_years)
             marks = np.clip(marks + (p.fixed_debit - float(marks[0])) * fade, 0.0, p.width)
-        hit_t = np.where(marks[1:] >= p.target * p.width)[0]
+        target = p.target_div if (p.target_div and expiry.month in (3, 6, 9, 12)) else p.target
+        hit_t = np.where(marks[1:] >= target * p.width)[0]
         hit_s = np.where(marks[1:] <= debit * (1 - p.stop))[0] if p.stop else np.array([], int)
         j_close = j_end - 1; reason = 'expiry' if expiry <= all_dates[-1] else 'open'
         if len(hit_t) and (i + hit_t[0] + 1 < j_close or reason == 'open'):

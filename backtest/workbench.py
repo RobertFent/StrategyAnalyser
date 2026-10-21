@@ -130,6 +130,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
       <label class="hint">width $<input type="number" id="spWidth" value="10" step="1" style="width:55px"></label>
       <label class="hint">expiry <input type="number" id="spDte" value="60" step="1" style="width:55px"> days</label>
       <label class="hint">close at <input type="number" id="spTarget" value="99" step="1" style="width:55px">% of width</label>
+      <label class="hint">(<input type="number" id="spTargetDiv" value="95" step="1" style="width:55px">% in dividend months)</label>
     </div>
     <div class="row" style="margin-bottom:8px">
       <label class="hint">debit you pay $<input type="number" id="spDebit" value="4.95" step="0.05" style="width:65px"></label>
@@ -199,7 +200,7 @@ function jobOpts(btn) {
   if (kind === 'spreads' || kind === 'spreads_tune') {
     o.offset = $('spOffset').value; o.width = $('spWidth').value; o.dte = $('spDte').value; o.target = $('spTarget').value;
     o.debit = $('spDebit').value; o.cadence = $('spCadence').value; o.trend_ma = $('spTrend').value; o.stop = $('spStop').value; o.metric = $('metric').value;
-    o.strike_mode = $('spStrike').value; o.name = $('spName').value;
+    o.strike_mode = $('spStrike').value; o.name = $('spName').value; o.target_div = $('spTargetDiv').value;
   }
   if (kind === 'spreads_save') { o.name = $('spName').value; }
   return {kind, opts: o};
