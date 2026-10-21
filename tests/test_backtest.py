@@ -328,7 +328,7 @@ def test_spreads_pricing_and_backtest():
     dates = pd.bdate_range('2015-01-01', periods=900)
     close = 200 * np.exp(np.cumsum(rng.normal(0.0004, 0.01, len(dates))))
     df = pd.DataFrame({'Date': dates, 'Close': close, 'AdjClose': close, 'VIX': 16.0})
-    p = SpreadParams(offset=0.017, width=10, dte=60, target=0.99, cadence='monthly', trend_ma=200)
+    p = SpreadParams(offset=0.017, width=10, dte=60, target=0.99, cadence='monthly', trend_ma=200, strike_mode='offset', fixed_debit=0.0)
     assert p.concurrent() == 2
     eq, tr = backtest(df, p, '2016-01-01', None, 100000)
     assert len(tr) > 10 and (eq > 0).all() and eq.iloc[0] == 100000
@@ -338,6 +338,13 @@ def test_spreads_pricing_and_backtest():
     assert ((closed['exit_date'] <= closed['expiry'] + pd.Timedelta(days=3))).all()
     # cash accounting: final equity = capital + sum of trade P&L (open ones at their mark)
     assert abs(eq.iloc[-1] - (100000 + tr['pnl'].sum())) < 1e-6
+    # strikes chosen by debit: every spread costs what you pay, strikes move with the market
+    q = SpreadParams(width=10, dte=60, cadence='expiry', trend_ma=0, strike_mode='debit', fixed_debit=4.95)
+    eq2, tr2 = backtest(df, q, '2016-01-01', None, 100000)
+    assert len(tr2) > 10 and (tr2['debit'] == 4.95).all() and tr2['k1'].nunique() > 5
+    assert tr2['entry_date'].dt.weekday.isin([3, 4]).all()                       # third Fridays (or the Thursday before)
+    from backtest.spreads import third_friday
+    assert third_friday(2026, 10) == pd.Timestamp('2026-10-16')
     # jobs build a whitelisted command for it
     from backtest.jobs import build_command
     argv, _ = build_command('spreads', {'offset': '1.7', 'width': '10', 'dte': '60', 'target': '99', 'debit': '4.95',

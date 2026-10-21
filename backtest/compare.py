@@ -30,6 +30,7 @@ from backtest.membership import load_membership
 from backtest.metrics import compute_metrics, yearly_returns
 from backtest.significance import luck_summary
 from backtest.strategy import StrategyParams
+from backtest.spreads import is_spread_file
 
 COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#6250d6', '#008300', '#e34948']
 COLORS_DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#9085e9', '#008300', '#e66767']
@@ -41,6 +42,9 @@ def _pct(x: float, d: int = 1) -> str:
 
 def run_one(path: Path, default_index: str, start: str, holdout_start: str, cost: float,
             stores: dict) -> dict:
+    if is_spread_file(path):
+        from backtest.spreads import run_one as run_spreads
+        return run_spreads(path, start, holdout_start)
     p = StrategyParams.load(path)
     meta = json.loads(path.read_text())
     index = p.universe or default_index

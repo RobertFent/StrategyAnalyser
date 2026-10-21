@@ -2,16 +2,19 @@
 
     python3 -m backtest.spreads --fetch            # SPY (unadjusted) + VIX -> data/options_underlying.csv.gz
     python3 -m backtest.spreads                    # backtest the default setup (below), prints a report
-    python3 -m backtest.spreads --offset 0.017 --width 10 --dte 60 --target 0.99 --cadence monthly --trend-ma 200
-    python3 -m backtest.spreads --debit 4.95       # scale the model so your setup costs what you really pay
-    python3 -m backtest.spreads --tune             # grid over offsets, widths, expiries, targets, stops, filters
+    python3 -m backtest.spreads --params strategies/bcs_495.json     # HTML report for a saved option plan
+    python3 -m backtest.spreads --width 10 --dte 60 --fixed-debit 4.95 --save "My spread plan"   # save as a plan
+    python3 -m backtest.spreads --tune             # grid over strikes, widths, expiries, targets, stops, cadence, filter
 
 How it works
   - No option quotes exist for 14 years, so every spread is priced with Black-Scholes using the VIX of the
-    day as implied volatility (times --iv-mult, default 1.0; OTM calls usually trade a bit below VIX).
+    day as implied volatility, the 13-week T-bill as the rate and a 1.4% dividend yield (times --iv-mult, default 1.0; OTM calls usually trade a bit below VIX).
     The entry debit, the daily mark and the early close all come from that model; the payoff at expiry
     is exact (intrinsic value from the SPY close). SPY is unadjusted so dividends hit the calls like real life.
-  - A spread: buy the call at strike round(SPY * (1 + offset)), sell the call `width` dollars higher, expiring
+  - A spread: buy a call, sell the call `width` dollars higher. strike_mode 'debit' (default) picks, each entry
+    day, the whole-dollar strikes whose model price is closest to the debit you pay (fixed_debit), i.e. "I always pay
+    4.95 for a $10 spread" - the strikes land wherever the market prices that; 'offset' puts the long strike at
+    SPY * (1 + offset) instead. Spreads expire
     on the Friday closest to `dte` calendar days ahead. Close when the spread is worth at least
     target * width (e.g. 9.90 on a 10-wide), at a stop (value <= debit * (1 - stop)), or at expiry.
   - Cadence: a new spread on the first trading day of each month / week, or the day after the last one closed;
@@ -25,14 +28,16 @@ from __future__ import annotations
 
 import argparse
 import itertools
+import json
 import math
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from backtest.data import DATA_DIR, OUTPUT_DIR
+from backtest.data import DATA_DIR, OUTPUT_DIR, ROOT_DIR
 from backtest.metrics import compute_metrics, yearly_returns, fmt_pct
 
 UNDERLYING = DATA_DIR / 'options_underlying.csv.gz'
@@ -48,6 +53,10 @@ def fetch(start: str = '2010-01-01') -> pd.DataFrame:
         vix.columns = vix.columns.get_level_values(0)
     df = pd.DataFrame({'Date': spy.index, 'Close': spy['Close'].to_numpy(), 'AdjClose': spy['Adj Close'].to_numpy()})
     df['VIX'] = vix['Close'].reindex(spy.index).ffill().to_numpy()
+    irx = yf.download('^IRX', start=start, auto_adjust=False, progress=False)
+    if isinstance(irx.columns, pd.MultiIndex):
+        irx.columns = irx.columns.get_level_values(0)
+    df['Rate'] = (irx['Close'].reindex(spy.index).ffill().bfill() / 100.0).to_numpy()   # 13-week T-bill, annual
     df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None).dt.normalize()
     DATA_DIR.mkdir(exist_ok=True)
     df.to_csv(UNDERLYING, index=False, compression='gzip')
@@ -58,6 +67,8 @@ def load() -> pd.DataFrame:
     if not UNDERLYING.exists():
         raise FileNotFoundError(f'{UNDERLYING} missing. Run `python3 -m backtest.spreads --fetch` first.')
     df = pd.read_csv(UNDERLYING, parse_dates=['Date']).dropna()
+    if 'Rate' not in df:
+        print('NOTE: no T-bill rates in the data file (older download); using 0%. Run `python3 -m backtest.spreads --fetch` again.')
     return df.sort_values('Date').reset_index(drop=True)
 
 
@@ -66,21 +77,22 @@ def _ncdf(x: np.ndarray) -> np.ndarray:
     return 0.5 * (1.0 + np.vectorize(math.erf)(x / math.sqrt(2.0)))
 
 
-def call_price(s: np.ndarray, k: float, t_years: np.ndarray, iv: np.ndarray, r: float = 0.0) -> np.ndarray:
-    """Black-Scholes call; at t=0 returns intrinsic value."""
+def call_price(s: np.ndarray, k: float, t_years: np.ndarray, iv: np.ndarray, r=0.0, q: float = 0.0) -> np.ndarray:
+    """Black-Scholes call with continuous dividend yield q; at t=0 returns intrinsic value. r may be an array."""
     s, t, iv = np.asarray(s, float), np.maximum(np.asarray(t_years, float), 0.0), np.maximum(np.asarray(iv, float), 1e-4)
+    r = np.broadcast_to(np.asarray(r, float), s.shape)
     out = np.maximum(s - k, 0.0)
     live = t > 0
     if live.any():
-        st, tt, vt = s[live], t[live], iv[live]
-        d1 = (np.log(st / k) + (r + 0.5 * vt ** 2) * tt) / (vt * np.sqrt(tt))
+        st, tt, vt, rt = s[live], t[live], iv[live], r[live]
+        d1 = (np.log(st / k) + (rt - q + 0.5 * vt ** 2) * tt) / (vt * np.sqrt(tt))
         d2 = d1 - vt * np.sqrt(tt)
-        out[live] = st * _ncdf(d1) - k * np.exp(-r * tt) * _ncdf(d2)
+        out[live] = st * np.exp(-q * tt) * _ncdf(d1) - k * np.exp(-rt * tt) * _ncdf(d2)
     return out
 
 
-def spread_value(s, k1, k2, t_years, iv, r=0.0):
-    return call_price(s, k1, t_years, iv, r) - call_price(s, k2, t_years, iv, r)
+def spread_value(s, k1, k2, t_years, iv, r=0.0, q=0.0):
+    return call_price(s, k1, t_years, iv, r, q) - call_price(s, k2, t_years, iv, r, q)
 
 
 # ----------------------------------------------------------------------------- strategy
@@ -97,8 +109,19 @@ class SpreadParams:
     iv_mult: float = 1.0       # implied vol = VIX/100 * iv_mult
     slip: float = 0.05         # dollars per spread per side
     commission: float = 0.65   # dollars per contract per leg per side
-    rate: float = 0.0
-    fixed_debit: float = 0.0   # if > 0: pay exactly this for the spread, whatever the model says (strikes stay yours)
+    rate: float = -1.0         # risk-free rate; -1 = the 13-week T-bill of the day (needs --fetch), else a fixed number
+    div_yield: float = 0.014   # SPY dividend yield: pulls the forward (and the strikes that cost a given debit) down
+    fixed_debit: float = 4.95  # the debit you pay per spread (0 = pay the model price)
+    strike_mode: str = 'debit' # debit: pick the strikes that cost fixed_debit that day | offset: strikes at `offset` from the price
+
+    @classmethod
+    def load(cls, path) -> 'SpreadParams':
+        data = json.loads(Path(path).read_text())
+        d = data.get('params', data)
+        return cls(**{k: v for k, v in d.items() if k in asdict(cls())})
+
+    def to_dict(self) -> dict:
+        return asdict(self)
 
     def concurrent(self) -> int:
         """How many spreads are normally open at once (expiry / cadence)."""
@@ -109,10 +132,15 @@ class SpreadParams:
         where = ('out of the money' if self.offset > 0 else 'in the money' if self.offset < 0 else 'at the money')
         cad = {'expiry': 'the third Friday of each month (monthly expiration day)', 'monthly': 'first trading day of each month',
                'weekly': 'first trading day of each week', 'next': 'the day after the previous one closed'}[self.cadence]
+        exp = (f'expiring on the monthly expiration about {self.dte} days out' if self.cadence == 'expiry' else f'expiring in about {self.dte} days')
+        if self.strike_mode == 'debit' and self.fixed_debit:
+            strikes = (f'  buy the SPY call and sell the call ${self.width:g} higher, {exp}, at the strikes that cost '
+                       f'${self.fixed_debit:.2f} that day (the model picks them from the VIX; usually around the money)')
+        else:
+            strikes = (f'  buy the SPY call {self.offset * 100:+.1f}% from the price ({where}), sell the call ${self.width:g} higher, {exp}'
+                       + (f'; you pay ${self.fixed_debit:.2f} for it' if self.fixed_debit else ''))
         lines = [f'OPEN on {cad}' + (f', only while SPY is above its {self.trend_ma}-day average' if self.trend_ma else '') + ':',
-                 f'  buy the SPY call {self.offset * 100:+.1f}% from the price ({where}), sell the call ${self.width:g} higher, '
-                 + (f'expiring on the monthly expiration about {self.dte} days out' if self.cadence == 'expiry' else f'expiring in about {self.dte} days')
-                 + (f'; you pay ${self.fixed_debit:.2f} for it' if self.fixed_debit else ''),
+                 strikes,
                  f'CLOSE when the spread is worth {self.target * 100:.0f}% of its width (${self.target * self.width:.2f} on a ${self.width:g}-wide)'
                  + (f', when it has lost {self.stop * 100:.0f}% of the debit' if self.stop else '') + ', or at expiry',
                  f'SIZE: {self.risk * 100:.0f}% of the account at risk in total, about {self.concurrent()} spread(s) open at once '
@@ -130,6 +158,13 @@ def _expiry_third_friday(d: pd.Timestamp, dte: int) -> pd.Timestamp:
     months = max(1, round(dte / 30))
     m = d.month - 1 + months
     return third_friday(d.year + m // 12, m % 12 + 1)
+
+
+def _strike_for_debit(s: float, width: float, t: float, iv: float, debit: float, r: float = 0.0, q: float = 0.0) -> float:
+    """The whole-dollar long strike whose spread costs closest to `debit` in the model that day."""
+    ks = np.arange(math.floor(s * 0.9), math.ceil(s * 1.1) + 1, dtype=float)
+    vals = np.array([spread_value(np.array([s]), k, k + width, np.array([t]), np.array([iv]), r, q)[0] for k in ks])
+    return float(ks[int(np.argmin(np.abs(vals - debit)))])
 
 
 def _expiry(d: pd.Timestamp, dte: int) -> pd.Timestamp:
@@ -162,6 +197,7 @@ def backtest(df: pd.DataFrame, p: SpreadParams, start: str, end: str | None = No
         sched = np.ones(len(d), bool)
     trend_ok = (full.reindex(dates) > ma.reindex(dates)).fillna(False).to_numpy().astype(bool) if ma is not None else np.ones(len(d), bool)
     close = d['Close'].to_numpy(); iv = d['VIX'].to_numpy() / 100.0 * p.iv_mult
+    rate = (d['Rate'].to_numpy() if 'Rate' in d and p.rate < 0 else np.full(len(d), max(p.rate, 0.0)))
     all_dates = full.index; n_days = len(d)
     # 1) every spread's daily mark until it closes (vectorised per spread)
     legs = []
@@ -175,11 +211,15 @@ def backtest(df: pd.DataFrame, p: SpreadParams, start: str, end: str | None = No
             expiry = all_dates[all_dates <= expiry][-1]
         j_end = int(np.searchsorted(dates.to_numpy(), np.datetime64(expiry), side='right'))   # exclusive
         j_end = min(max(j_end, i + 2), n_days)
-        k1 = float(round(close[i] * (1 + p.offset))); k2 = k1 + p.width
         t_years = np.maximum((expiry - dates.iloc[i:j_end]).dt.days.to_numpy(), 0) / 365.0
         if expiry > all_dates[-1]:
             t_years = np.maximum(t_years, 1 / 365)
-        marks = spread_value(close[i:j_end], k1, k2, t_years, iv[i:j_end], p.rate)
+        if p.strike_mode == 'debit' and p.fixed_debit:
+            k1 = _strike_for_debit(close[i], p.width, t_years[0], iv[i], p.fixed_debit - p.slip, rate[i], p.div_yield)
+        else:
+            k1 = float(round(close[i] * (1 + p.offset)))
+        k2 = k1 + p.width
+        marks = spread_value(close[i:j_end], k1, k2, t_years, iv[i:j_end], rate[i:j_end], p.div_yield)
         debit = p.fixed_debit if p.fixed_debit else float(marks[0]) + p.slip
         if p.fixed_debit:
             # what you paid above the model fades out linearly towards expiry: day 0 = your price, expiry = exact payoff
@@ -296,6 +336,8 @@ def report(df: pd.DataFrame, p: SpreadParams, start: str, holdout: str, capital:
                          f'on at most ${bp:,.0f} tied up at once = {closed["pnl_1"].sum() / yrs / bp * 100 if bp else 0:+.0f}% per year on that buying power'
                          + (f' ({len(t) - len(closed)} still open)' if len(t) > len(closed) else ''))
             rs = t['exit_reason'].value_counts()
+            dist = ((t['k1'] + p.width / 2) / t['spy_entry'] - 1) * 100
+            lines.append(f'  strikes: the spread midpoint sat on average {dist.mean():+.2f}% from the SPY price (range {dist.min():+.1f}% .. {dist.max():+.1f}%)')
             lines.append(f'  per spread: avg {t["net_return"].mean() * 100:+.1f}% of the debit, '
                          f'avg win {t.loc[t.pnl > 0, "net_return"].mean() * 100 if (t.pnl > 0).any() else 0:+.0f}%, '
                          f'avg loss {t.loc[t.pnl <= 0, "net_return"].mean() * 100 if (t.pnl <= 0).any() else 0:+.0f}%, '
@@ -323,7 +365,51 @@ def report(df: pd.DataFrame, p: SpreadParams, start: str, holdout: str, capital:
     return lines, {'equity': eq, 'trades': tr, 'metrics': out}
 
 
-def _html(text: str, eq: pd.Series, df: pd.DataFrame, holdout: str) -> str:
+def is_spread_file(path) -> bool:
+    try:
+        return json.loads(Path(path).read_text()).get('type') == 'spreads'
+    except (OSError, ValueError):
+        return False
+
+
+def run_one(path, start: str, holdout_start: str, capital: float = 100000.0) -> dict:
+    """Same shape as compare.run_one: equity, metrics, verdict count and luck for an option plan."""
+    from backtest import criteria
+    from backtest.benchmarks import benchmark_metrics, spy_buy_hold
+    from backtest.significance import luck_summary
+    path = Path(path); p = SpreadParams.load(path); meta = json.loads(path.read_text())
+    df = load()
+    eq, tr = backtest(df, p, start, None, capital)
+    hold = eq[eq.index >= holdout_start]
+    stressed, trs = backtest(df, SpreadParams(**{**asdict(p), 'slip': p.slip * 2, 'commission': p.commission * 2}), start, None, capital)
+    closed = tr[tr.exit_reason != 'open'] if len(tr) else tr
+    fm = compute_metrics(eq, closed); hm = compute_metrics(hold / hold.iloc[0] * capital, closed[closed.exit_date >= holdout_start] if len(closed) else closed)
+    sm = compute_metrics(stressed, trs[trs.exit_reason != 'open'] if len(trs) else trs)
+    bench = df[['Date', 'AdjClose']].rename(columns={'AdjClose': 'Close'})
+    fb = benchmark_metrics(bench, eq.index); hb = benchmark_metrics(bench, hold.index)
+    trials = max(1, int(meta.get('trials', 1) or 1))
+    luck = luck_summary(eq, spy_buy_hold(bench, eq.index), trials)
+    verdict = criteria.evaluate(fm, hm, sm, fb['SPY buy & hold'], hb['SPY buy & hold'], hb['SPY timing (>SMA200)'], luck)
+    return {'file': path.name, 'name': meta.get('name') or path.stem, 'index': 'SPY options', 'params': p,
+            'equity': eq, 'trades': tr, 'full': fm, 'holdout': hm, 'passed': sum(ok for _, ok, _ in verdict), 'checks': len(verdict),
+            'luck': min(luck['dsr']['prob'], luck['bootstrap']['p_positive']), 'trials': trials, 'verdict': verdict}
+
+
+def build_report(path, start: str, holdout_start: str, capital: float = 100000.0) -> Path:
+    """HTML report for an option plan: verdict, chart, text report. Saved like the other reports."""
+    from backtest.criteria import format_verdict
+    path = Path(path); p = SpreadParams.load(path); df = load()
+    lines, res = report(df, p, start, holdout_start, capital)
+    r = run_one(path, start, holdout_start, capital)
+    lines = [f'VERDICT ({r["passed"]}/{r["checks"]} checks passed)'] + format_verdict(r['verdict']) + [''] + lines
+    text = '\n'.join(lines)
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    out = OUTPUT_DIR / f'report_{path.stem}_{datetime.now():%Y%m%d_%H%M%S}.html'
+    out.write_text(_html(text, res['equity'], df, holdout_start, title=r['name']))
+    return out
+
+
+def _html(text: str, eq: pd.Series, df: pd.DataFrame, holdout: str, title: str = 'SPY call spreads') -> str:
     """Self-contained page: growth of the account vs SPY (log scale) above the text report."""
     import html as _h
     spy = df.set_index('Date')['AdjClose'].reindex(eq.index).ffill()
@@ -352,10 +438,11 @@ def _html(text: str, eq: pd.Series, df: pd.DataFrame, holdout: str) -> str:
     parts.append(f'<text x="{W - R}" y="{y(spy.iloc[-1]) + 4:.1f}" text-anchor="end" font-size="12" fill="#7a7974">SPY</text>')
     parts.append(f'<text x="{W - R}" y="{y(eq.iloc[-1]) - 8:.1f}" text-anchor="end" font-size="12" fill="#2a78d6" font-weight="600">Call spreads</text>')
     svg = f'<svg viewBox="0 0 {W} {H}" style="width:100%;max-width:960px;display:block">' + ''.join(parts) + '</svg>'
-    return ('<!doctype html><meta charset="utf-8"><title>SPY call spreads</title>'
+    import html as _hh
+    return ('<!doctype html><meta charset="utf-8"><title>' + _hh.escape(title) + '</title>'
             '<body style="margin:0;background:#f4f3f0;color:#0b0b0b;font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">'
             '<main style="max-width:1000px;margin:0 auto;padding:28px 16px">'
-            '<h1 style="font-size:24px;margin:0 0 4px">SPY call spreads</h1>'
+            '<h1 style="font-size:24px;margin:0 0 4px">' + _hh.escape(title) + '</h1>'
             '<p style="color:#52514e;margin:0 0 16px">Growth of the account vs SPY buy &amp; hold, log scale. Shaded: test period.</p>'
             f'<div style="background:#fcfcfb;border:1px solid #e3e2dd;border-radius:14px;padding:16px">{svg}</div>'
             f'<pre style="white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;background:#fcfcfb;border:1px solid #e3e2dd;border-radius:14px;padding:16px;margin-top:18px">{_h.escape(text)}</pre>'
@@ -401,20 +488,32 @@ def main() -> None:
     ap.add_argument('--metric', default='calmar', choices=['calmar', 'sharpe', 'cagr'])
     ap.add_argument('--start', default='2016-01-01')
     ap.add_argument('--holdout-start', default='2025-01-01')
+    ap.add_argument('--params', help='an option plan file from strategies/ (type "spreads"); makes the HTML report like backtest.report')
+    ap.add_argument('--save', help='save this setup as strategies/<name>.json so Reports and Compare pick it up')
     ap.add_argument('--capital', type=float, default=100000, help='account size; contracts are whole, so small accounts cannot size small risks')
-    ap.add_argument('--debit', type=float, default=0.0,
-                    help='what you actually pay for this setup, e.g. 4.95: scales the implied vol so the model matches it')
+    ap.add_argument('--debit', type=float, default=0.0, help='what you pay per spread (same as --fixed-debit)')
     for f, v in asdict(SpreadParams()).items():
         ap.add_argument('--' + f.replace('_', '-'), type=type(v), default=v)
     a = ap.parse_args()
     if a.fetch:
         df = fetch(); print(f'Saved {UNDERLYING}: {df.Date.iloc[0].date()} .. {df.Date.iloc[-1].date()}, {len(df)} days'); return
+    if a.params:
+        out = build_report(a.params, a.start, a.holdout_start, a.capital)
+        import html as _hh
+        print(_hh.unescape(Path(out).read_text().split('<pre')[1].split('>', 1)[1].split('</pre>')[0]))
+        print(f'Report saved: {out}')
+        return
     df = load()
     p = SpreadParams(**{f: getattr(a, f) for f in asdict(SpreadParams())})
-    note = ''
     if a.debit:
-        p, note = calibrate(df, p, a.start, a.debit)
-        print(note)
+        p.fixed_debit = a.debit
+    note = ''
+    if a.save:
+        from backtest.app import slugify
+        f = ROOT_DIR / 'strategies' / f'{slugify(a.save)}.json'
+        f.write_text(json.dumps({'name': a.save, 'type': 'spreads', 'params': p.to_dict()}, indent=2) + '\n')
+        print(f'Saved plan: {f.relative_to(ROOT_DIR)}  (now in the plan list of Reports / Compare)')
+        return
     out_dir = OUTPUT_DIR / f'spreads_{datetime.now():%Y%m%d_%H%M%S}'
     out_dir.mkdir(parents=True, exist_ok=True)
     if a.tune:

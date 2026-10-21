@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from backtest.data import OUTPUT_DIR, ROOT_DIR
+from backtest.spreads import is_spread_file
 
 JOB_DIR = OUTPUT_DIR / 'jobs'
 _JOBS: dict[str, dict] = {}
@@ -48,6 +49,8 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
         return [sys.executable, 'tests/test_backtest.py'], 'Self-test of the engine'
     if kind == 'report':
         f = _strategy_file(opts.get('file', 'willr.json'))
+        if is_spread_file(ROOT_DIR / f):
+            return py + ['backtest.spreads', '--params', f, '--start', start, '--holdout-start', holdout], f'Report: {Path(f).stem}'
         return py + ['backtest.report', '--params', f, '--start', start, '--holdout-start', holdout, '--no-open'], f'Report: {Path(f).stem}'
     if kind == 'compare':
         files = [_strategy_file(f) for f in opts.get('files', [])]
@@ -55,6 +58,8 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
             'Compare ' + (f'{len(files)} plans' if files else 'all plans') + ' with SPY'
     if kind == 'analyze':
         f = _strategy_file(opts.get('file', 'willr.json'))
+        if is_spread_file(ROOT_DIR / f):
+            raise ValueError('The stress test is for stock plans; an option plan gets its verdict and luck check in its report.')
         quick = bool(opts.get('quick', True))
         trials = max(1, int(opts.get('trials') or 1))
         cmd = py + ['backtest.analyze', '--params', f, '--start', start, '--holdout-start', holdout, '--trials', str(trials)]
@@ -72,7 +77,7 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
         return cmd, f'Search {n} rule sets ({space})'
     if kind == 'spreads_fetch':
         return py + ['backtest.spreads', '--fetch'], 'Download SPY and VIX history'
-    if kind in ('spreads', 'spreads_tune'):
+    if kind in ('spreads', 'spreads_tune', 'spreads_save'):
         def num(key, lo, hi, scale=1.0):
             v = float(opts.get(key) or 0)
             if not (lo <= v <= hi):
@@ -81,13 +86,19 @@ def build_command(kind: str, opts: dict) -> tuple[list[str], str]:
         cadence = opts.get('cadence', 'expiry')
         if cadence not in ('expiry', 'monthly', 'weekly', 'next'):
             raise ValueError('Unknown cadence.')
-        cmd = py + ['backtest.spreads', '--start', start, '--holdout-start', holdout,
+        strike_mode = opts.get('strike_mode', 'debit')
+        if strike_mode not in ('debit', 'offset'):
+            raise ValueError('Unknown strike mode.')
+        cmd = py + ['backtest.spreads', '--start', start, '--holdout-start', holdout, '--strike-mode', strike_mode,
                     '--offset', f'{num("offset", -10, 10, 0.01):.4f}', '--width', f'{num("width", 1, 100):g}',
                     '--dte', f'{int(num("dte", 7, 365))}', '--target', f'{num("target", 10, 100, 0.01):.2f}',
                     '--stop', f'{num("stop", 0, 100, 0.01):.2f}', '--cadence', cadence,
                     '--trend-ma', f'{int(num("trend_ma", 0, 400))}']
         if float(opts.get('debit') or 0) > 0:
             cmd += ['--debit', f'{num("debit", 0.01, 1000):.2f}']
+        if kind == 'spreads_save':
+            name = re.sub(r'[^\w .,:$%()+-]', '', str(opts.get('name') or 'SPY call spread'))[:80].strip() or 'SPY call spread'
+            return cmd + ['--save', name], f'Save option plan: {name}'
         if kind == 'spreads_tune':
             metric = opts.get('metric', 'calmar')
             if metric not in ('calmar', 'sharpe', 'cagr'):

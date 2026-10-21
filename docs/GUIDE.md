@@ -213,8 +213,11 @@ Tries many rule sets and tells you how good "pick the best" really is:
 ### Options: SPY call spreads (step 6)
 No option quotes exist for 14 years, so the tool models them: each spread is priced with Black-Scholes, using the
 VIX of the day as implied volatility, and the payoff at expiry is exact (from SPY's close; SPY unadjusted, so
-dividends hit the calls as in real life). *Debit you pay* scales the model so that your setup costs on average what
-it really costs you; everything else follows from that. Reported: the whole account (cash idle, 10% of the account
+dividends hit the calls as in real life). By default the strikes are chosen the way you trade: *the spread that
+costs the debit you pay* (e.g. 4.95 on a $10 width), so the strikes land wherever the market prices that on the day;
+alternatively a fixed distance from the price. *Save as a plan* writes the setup to `strategies/` (`"type":
+"spreads"`), and from then on step 3 reports and compares it like any stock plan, with the same 7-check verdict and
+luck check (the stress test of step 4 is for stock plans only). `strategies/bcs_495.json` is the saved routine. Reported: the whole account (cash idle, 10% of the account
 at risk in total, split over the spreads that overlap), SPY buy & hold and SPY timing on the same dates, per-spread
 statistics (average result in % of the debit, how many closed at the target, at expiry, at the stop), the same
 routine at 2/5/10/20% at risk, and one-contract constant size: total P&L on the buying power tied up at once.

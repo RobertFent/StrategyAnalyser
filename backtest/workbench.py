@@ -123,9 +123,10 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 
   <div class="card">
     <div class="step"><span class="n">6</span><h2>Options: SPY call spreads</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Backtests a bull call spread routine on SPY without option quotes: each spread is priced with Black-Scholes using the VIX of the day, the payoff at expiry is exact. Enter the debit you really pay and the model is scaled to it. Tune tries 720 variants (strikes, width, expiry, close rule, stop, cadence, trend filter).</span></span></div>
-    <p>Buy a call, sell a higher call, same expiry. Needs SPY and VIX history once (<i>Download SPY + VIX</i>).</p>
+    <p>Buy a call, sell a higher call, same expiry. Needs SPY and VIX history once (<i>Download SPY + VIX</i>). <i>Save as a plan</i> puts the setup into the plan list, so step 3 reports and compares it like any other plan.</p>
     <div class="row" style="margin-bottom:8px">
-      <label class="hint">long strike <input type="number" id="spOffset" value="1.7" step="0.1" style="width:60px">% from price</label>
+      <select id="spStrike"><option value="debit" selected>strikes that cost the debit that day</option><option value="offset">long strike at a fixed distance</option></select>
+      <label class="hint" id="spOffsetWrap" style="display:none">long strike <input type="number" id="spOffset" value="1.7" step="0.1" style="width:60px">% from price</label>
       <label class="hint">width $<input type="number" id="spWidth" value="10" step="1" style="width:55px"></label>
       <label class="hint">expiry <input type="number" id="spDte" value="60" step="1" style="width:55px"> days</label>
       <label class="hint">close at <input type="number" id="spTarget" value="99" step="1" style="width:55px">% of width</label>
@@ -138,6 +139,8 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
     </div>
     <div class="row">
       <button class="btn" data-job="spreads">Backtest this setup</button>
+      <button class="btn ghost" data-job="spreads_save">Save as a plan</button>
+      <input type="text" id="spName" placeholder="plan name" value="SPY call spread 4.95" style="width:170px">
       <button class="btn ghost" data-job="spreads_tune">Tune (5–10 min)</button>
       <button class="btn ghost" data-job="spreads_fetch">Download SPY + VIX</button>
     </div>
@@ -181,8 +184,9 @@ async function status() {
   d.innerHTML = `<span>Data</span><b><span class="pill ok">ready</span> ${s.tickers} stocks, ${esc(s.first)} – ${esc(s.last)}</b>` +
     `<span>Index history</span><b>${s.membership ? 'point-in-time members on' : '<span class="pill warn">today\'s members only</span>'}` +
     (s.coverage != null ? `, ${s.coverage}% of member-days have prices` : '') + `</b>`;
-  const opts = s.strategies.map(x => `<option value="${esc(x.file)}">${esc(x.name)}</option>`).join('');
-  for (const id of ['planSel', 'planSel2']) { const sel = $(id), cur = sel.value; sel.innerHTML = opts; if (cur) sel.value = cur; }
+  const opt = x => `<option value="${esc(x.file)}">${esc(x.name)}</option>`;
+  const fill = (id, list) => { const sel = $(id), cur = sel.value; sel.innerHTML = list.map(opt).join(''); if (cur) sel.value = cur; };
+  fill('planSel', s.strategies); fill('planSel2', s.strategies.filter(x => x.type !== 'spreads'));
   const reps = $('reports'); reps.innerHTML = s.reports.length ? '' : '<li class="empty">No reports yet.</li>';
   s.reports.forEach(r => { const li = document.createElement('li'); li.innerHTML = `<a href="/reports/${encodeURIComponent(r.file)}">${esc(r.label)}</a>`; reps.appendChild(li); });
 }
@@ -195,9 +199,12 @@ function jobOpts(btn) {
   if (kind === 'spreads' || kind === 'spreads_tune') {
     o.offset = $('spOffset').value; o.width = $('spWidth').value; o.dte = $('spDte').value; o.target = $('spTarget').value;
     o.debit = $('spDebit').value; o.cadence = $('spCadence').value; o.trend_ma = $('spTrend').value; o.stop = $('spStop').value; o.metric = $('metric').value;
+    o.strike_mode = $('spStrike').value; o.name = $('spName').value;
   }
+  if (kind === 'spreads_save') { o.name = $('spName').value; }
   return {kind, opts: o};
 }
+$('spStrike').addEventListener('change', () => { $('spOffsetWrap').style.display = $('spStrike').value === 'offset' ? '' : 'none'; });
 document.querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', async () => {
   msg('');
   try { const r = await fetch('/api/jobs', {method: 'POST', body: JSON.stringify(jobOpts(b))}); const j = await r.json();

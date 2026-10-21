@@ -173,9 +173,15 @@ def list_strategies() -> list[dict]:
     for path in sorted(STRATEGY_DIR.glob('*.json')):
         try:
             data = json.loads(path.read_text())
+            if data.get('type') == 'spreads':
+                from backtest.spreads import SpreadParams
+                sp = SpreadParams.load(path)
+                out.append({'file': path.name, 'name': data.get('name') or path.stem, 'note': data.get('note', ''),
+                            'type': 'spreads', 'params': sp.to_dict(), 'rules': sp.describe()})
+                continue
             p = StrategyParams.from_dict(data.get('params', data))
             out.append({'file': path.name, 'name': data.get('name') or path.stem, 'note': data.get('note', ''),
-                        'params': p.to_dict(), 'rules': p.describe()})
+                        'type': 'stocks', 'params': p.to_dict(), 'rules': p.describe()})
         except Exception:  # skip broken files instead of failing the page
             continue
     return out
@@ -286,6 +292,10 @@ class Handler(BaseHTTPRequestHandler):
                 file = _best_params_path(body.get('file', '')) or STRATEGY_DIR / Path(body.get('file', '')).name
                 if not file.is_file():
                     return self._json({'error': 'Strategy file not found.'}, 404)
+                from backtest.spreads import is_spread_file, build_report
+                if is_spread_file(file):
+                    out = build_report(file, body.get('start') or '2016-01-01', body.get('holdout_start') or '2025-01-01')
+                    return self._json({'url': f'/reports/{out.name}'})
                 from backtest.report import build  # imported lazily: keeps start-up fast
                 uni = StrategyParams.load(file).universe or 'sp500'
                 out = build(file, uni, body.get('start') or '2016-01-01',
@@ -705,8 +715,8 @@ async function loadState() {
   j.strategies.forEach(s => {
     const li = document.createElement('li');
     li.innerHTML = `<div><div class="t">${esc(s.name)}</div><div class="s">${esc(s.file)}</div></div>
-      <div class="acts"><button class="btn ghost" data-a="edit">Edit</button><button class="btn ghost" data-a="run">Report</button></div>`;
-    li.querySelector('[data-a=edit]').onclick = () => loadPlan(s);
+      <div class="acts">${s.type === 'spreads' ? '' : '<button class="btn ghost" data-a="edit">Edit</button>'}<button class="btn ghost" data-a="run">Report</button></div>`;
+    if (s.type !== 'spreads') li.querySelector('[data-a=edit]').onclick = () => loadPlan(s);
     li.querySelector('[data-a=run]').onclick = () => runFile(s.file);
     plans.appendChild(li);
   });
