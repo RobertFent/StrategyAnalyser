@@ -44,6 +44,10 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-right-color:transparent; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-1px; margin-right:6px; }
 @keyframes spin { to { transform:rotate(360deg); } }
 .msg { margin-top:10px; font-size:14px; border-radius:9px; padding:9px 12px; display:none; } .msg.err { display:block; background:var(--bad-soft); color:var(--bad); }
+.info { position:relative; width:18px; height:18px; border-radius:50%; border:1.5px solid var(--text-3); color:var(--text-3); font-size:11.5px; font-weight:700; display:grid; place-items:center; cursor:help; flex:none; font-family:Georgia,serif; font-style:italic; }
+.info::before { content:"i"; }
+.info .tip { display:none; position:absolute; left:50%; top:26px; transform:translateX(-50%); width:300px; background:var(--text); color:var(--bg); font:400 13.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-style:normal; padding:10px 12px; border-radius:9px; box-shadow:0 6px 20px rgba(0,0,0,.18); z-index:5; }
+.info:hover .tip, .info:focus .tip { display:block; }
 .howto { margin-top:14px; background:var(--accent-soft); border:1px solid var(--border); border-radius:12px; padding:10px 16px; font-size:14.5px; }
 .howto summary { cursor:pointer; font-weight:650; } .howto ol { margin:8px 0 6px; padding-left:22px; } .howto li { margin:3px 0; } .howto p { margin:6px 0 2px; color:var(--text-2); }
 .readme { font-size:14px; color:var(--text-2); } .readme table { border-collapse:collapse; width:100%; } .readme th, .readme td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; } .readme th { color:var(--text); font-weight:600; white-space:nowrap; }
@@ -68,7 +72,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
 <div class="layout">
 <div>
   <div class="card">
-    <div class="step"><span class="n">1</span><h2>Price data</h2></div>
+    <div class="step"><span class="n">1</span><h2>Price data</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The raw material: daily open/high/low/close for every stock that was in the S&amp;P 500 since 2016, plus SPY. Do this once, then only add the latest days. Nothing else works without it.</span></span></div>
     <p>About 14 years of daily prices for every stock that was in the S&amp;P 500 since 2016, plus SPY. First download takes 1–2 minutes. Backtests only buy a stock while it was in the index.</p>
     <div class="status" id="dataStatus"><span>Data</span><b>checking…</b></div>
     <div class="row" style="margin-top:12px">
@@ -80,13 +84,13 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
 
   <div class="card">
-    <div class="step"><span class="n">2</span><h2>Build your own plan</h2></div>
+    <div class="step"><span class="n">2</span><h2>Build your own plan</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Turn a trading idea into exact rules: what to buy, when, when to sell, how many positions. Saved as a plan file you can report and stress-test. Write the rules down before you see any result.</span></span></div>
     <p>Describe the rules in the <a href="/">Planner</a>, save, run. Write the rules down before you look at any result.</p>
     <div class="row"><a class="btn" href="/">Open the Planner</a></div>
   </div>
 
   <div class="card">
-    <div class="step"><span class="n">3</span><h2>Reports</h2></div>
+    <div class="step"><span class="n">3</span><h2>Reports</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">What a plan did in the past: verdict, return per year, worst drop, growth of $10,000 against SPY, year by year. Compare puts all plans on one page.</span></span></div>
     <p>A one-page report for one rule set (verdict first), or all saved rule sets on one page against SPY.</p>
     <div class="row">
       <select id="planSel"></select>
@@ -96,7 +100,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
 
   <div class="card">
-    <div class="step"><span class="n">4</span><h2>Stress-test a plan</h2></div>
+    <div class="step"><span class="n">4</span><h2>Stress-test a plan</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Should you believe the report? Checks whether the result could be luck, whether small changes to the settings break it, whether it survives double costs, and whether random entries do just as well.</span></span></div>
     <p>Quick = verdict and luck checks (about a minute). Full = plus neighbouring settings, costs, random-entry test (about five minutes). The result is a text report.</p>
     <div class="row">
       <select id="planSel2"></select>
@@ -107,7 +111,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
 
   <div class="card">
-    <div class="step"><span class="n">5</span><h2>Search many rule sets</h2></div>
+    <div class="step"><span class="n">5</span><h2>Search many rule sets</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">Let the computer try hundreds of rule combinations and keep what holds up in walk-forward tests. Use it for ideas, then treat the best set with suspicion: the more you search, the more luck you find.</span></span></div>
     <p>Tries many settings with walk-forward validation (rules picked on 3 years, traded the next). 5–15 minutes. Judge the result by “Stitched OOS” against the SPY lines, not by the best in-sample score; the more you search, the more the best result is luck.</p>
     <div class="row">
       <select id="space"><option value="default">Oversold indicators (default)</option><option value="momentum">Momentum / breakouts</option><option value="indicators">More indicators</option><option value="breadth">Broad pullbacks</option><option value="exits">Exit variants</option></select>
@@ -118,7 +122,7 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
 
   <div class="card readme">
-    <div class="step"><span class="n">?</span><h2>How to read a result</h2></div>
+    <div class="step"><span class="n">?</span><h2>How to read a result</h2><span class="info" tabindex="0" aria-label="What this step is for"><span class="tip">The honest numbers are the test period and the verdict. Everything else can look good by chance.</span></span></div>
     <table>
       <tr><th>Verdict</th><td>7 checks agreed on before testing. All must pass before paper trading.</td></tr>
       <tr><th>Test period</th><td>2025 to today: the rules never saw this data. These are the honest numbers.</td></tr>
