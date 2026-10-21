@@ -19,15 +19,15 @@ on Windows tick *"Add Python to PATH"* in the installer). Then:
 | Step | Button | What happens |
 |---|---|---|
 | 1 | **Download all price data** | ~14 years of daily prices for every stock that was in the S&P 500 since 2016, plus SPY (1–2 min). The status line then shows the date range and how much of the index history has prices. Backtests only buy a stock while it was in the index. |
-| 2 | **Report for this plan** | one-page report for the selected rule set: verdict (7 checks, all must pass), key numbers, growth of $10,000 vs SPY, drawdowns, year by year |
-| 2 | **Compare all plans with SPY** | every saved rule set on one page against SPY buy & hold and SPY timing |
-| 3 | **Open the Planner** | describe your own rules (dip buying or trend following), save, run. Write the rules down before you look at any result. |
+| 2 | **Open the Planner** | describe your own rules (dip buying or trend following), save, run. Write the rules down before you look at any result. |
+| 3 | **Report for this plan** | one-page report for the selected rule set: verdict (7 checks, all must pass), key numbers, growth of $10,000 vs SPY, drawdowns, year by year |
+| 3 | **Compare all plans with SPY** | every saved rule set on one page against SPY buy & hold and SPY timing |
 | 4 | **Quick / Full** stress test | verdict and luck checks (1 min), or also neighbouring settings, costs and a random-entry test (5 min); text report |
 | 5 | **Start search** | tries hundreds of rule sets with walk-forward validation (5–15 min); then *Report of the best set* or *Save best set as a plan* |
 
-**In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). See results → step 2
-*Report for this plan* or *Compare all plans with SPY*. Your own rules → step 3 Planner: write them down first, test once,
-don't tweak until it looks good. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
+**In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). Your own rules → step 2
+Planner: write them down first, test once, don't tweak until it looks good. See results → step 3 *Report for this plan*
+or *Compare all plans with SPY*. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
 Results appear under *Jobs* → *Open report*; read the **test period** and the **verdict** first.
 
 Long steps run in the background; their progress and results appear under *Jobs* on the right. You can close the
@@ -54,9 +54,9 @@ python3 -m backtest.report --params strategies/<plan>.json --start <first day> -
 ```sh
 python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 python3 -m backtest.fetch --historical       # step 1
-python3 -m backtest.report                   # step 2 (strategies/willr.json)
-python3 -m backtest.compare                  # step 2, all plans
-python3 -m backtest.app                      # step 3, planner + workbench
+python3 -m backtest.app                      # step 2, planner + workbench
+python3 -m backtest.report                   # step 3 (strategies/willr.json)
+python3 -m backtest.compare                  # step 3, all plans
 python3 -m backtest.analyze --params strategies/<plan>.json --quick       # step 4
 python3 -m backtest.tune --space momentum --start 2016-01-01 --holdout-start 2025-01-01 --metric calmar --n-iter 400 --min-trades 20   # step 5
 python3 -m backtest                          # list of all commands

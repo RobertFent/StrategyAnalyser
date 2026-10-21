@@ -13,9 +13,9 @@ Double-click **`start.command`** (Mac) or **`start.bat`** (Windows). The first r
 search). Long steps run in the background and show their progress under *Jobs*. Everything in sections 1–5 can be
 done from there; the Terminal commands remain for reference.
 
-**In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). See results → step 2
-*Report for this plan* or *Compare all plans with SPY*. Your own rules → step 3 Planner: write them down first, test once,
-don't tweak until it looks good. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
+**In short:** first time → step 1 *Download all price data* (later only *Add the latest trading days*). Your own rules → step 2
+Planner: write them down first, test once, don't tweak until it looks good. See results → step 3 *Report for this plan*
+or *Compare all plans with SPY*. Check it holds up → step 4 *Quick* stress test; step 5 only to let the computer search for rules.
 Results appear under *Jobs* → *Open report*; read the **test period** and the **verdict** first.
 
 ## 1. One-time setup by hand (about 10 minutes)
@@ -40,32 +40,7 @@ To see all commands at any time: `python3 -m backtest`
 
 ---
 
-## 2. See the existing results
-
-```sh
-python3 -m backtest.report
-```
-This opens a one-page report in your browser for the reference rule set. It covers:
-
-- the rules in plain English
-- a **verdict** (6 checks, all must pass)
-- key numbers
-- the growth of $10,000 compared with the S&P 500
-- the worst drops
-- year-by-year returns
-
-Other saved rule sets are in the `strategies` folder, for example:
-```sh
-python3 -m backtest.report --params strategies/best_strategy.json
-```
-To see all of them on one page against SPY:
-```sh
-python3 -m backtest.compare
-```
-
----
-
-## 3. Test your own trading plan
+## 2. Test your own trading plan
 
 ```sh
 python3 -m backtest.app
@@ -96,6 +71,31 @@ When you're done, close the Terminal window or press `Ctrl+C`.
 - **Want to compare variants?** Decide them all up front, e.g. RSI(2), RSI(4) and RSI(7), and test all of
   them. Don't keep only the best.
 - **The test period** (2025 until today) was never used to pick any rule. It is the most honest number in the report.
+
+---
+
+## 3. See the existing results
+
+```sh
+python3 -m backtest.report
+```
+This opens a one-page report in your browser for the reference rule set. It covers:
+
+- the rules in plain English
+- a **verdict** (6 checks, all must pass)
+- key numbers
+- the growth of $10,000 compared with the S&P 500
+- the worst drops
+- year-by-year returns
+
+Other saved rule sets are in the `strategies` folder, for example:
+```sh
+python3 -m backtest.report --params strategies/best_strategy.json
+```
+To see all of them on one page against SPY:
+```sh
+python3 -m backtest.compare
+```
 
 ---
 

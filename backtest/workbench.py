@@ -58,8 +58,8 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   <summary>How to use</summary>
   <ol>
     <li><b>First time:</b> step 1, <i>Download all price data</i> (1–2 min). Later just <i>Add the latest trading days</i>.</li>
-    <li><b>See results:</b> step 2, pick a plan → <i>Report for this plan</i>, or <i>Compare all plans with SPY</i>.</li>
-    <li><b>Your own rules:</b> step 3 opens the Planner. Write the rules down first, then test them once; don't tweak until it looks good.</li>
+    <li><b>Your own rules:</b> step 2 opens the Planner. Write the rules down first, then test them once; don't tweak until it looks good.</li>
+    <li><b>See results:</b> step 3, pick a plan → <i>Report for this plan</i>, or <i>Compare all plans with SPY</i>.</li>
     <li><b>Check it holds up:</b> step 4 <i>Quick</i> stress test on the plan; step 5 only if you want the computer to search for rules.</li>
   </ol>
   <p>Results appear under <b>Jobs</b> on the right: click <i>Open report</i>. Read the <b>test period</b> and the <b>verdict</b> first; all 7 checks must pass before paper trading. Close this tab any time; jobs keep running while the launcher window is open.</p>
@@ -80,19 +80,19 @@ pre.log { white-space:pre-wrap; font:12.5px/1.5 ui-monospace,SFMono-Regular,Menl
   </div>
 
   <div class="card">
-    <div class="step"><span class="n">2</span><h2>Reports</h2></div>
+    <div class="step"><span class="n">2</span><h2>Build your own plan</h2></div>
+    <p>Describe the rules in the <a href="/">Planner</a>, save, run. Write the rules down before you look at any result.</p>
+    <div class="row"><a class="btn" href="/">Open the Planner</a></div>
+  </div>
+
+  <div class="card">
+    <div class="step"><span class="n">3</span><h2>Reports</h2></div>
     <p>A one-page report for one rule set (verdict first), or all saved rule sets on one page against SPY.</p>
     <div class="row">
       <select id="planSel"></select>
       <button class="btn" data-job="report">Report for this plan</button>
       <button class="btn ghost" data-job="compare">Compare all plans with SPY</button>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="step"><span class="n">3</span><h2>Build your own plan</h2></div>
-    <p>Describe the rules in the <a href="/">Planner</a>, save, run. Write the rules down before you look at any result.</p>
-    <div class="row"><a class="btn" href="/">Open the Planner</a></div>
   </div>
 
   <div class="card">
